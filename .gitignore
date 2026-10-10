@@ -1,0 +1,7 @@
+# Cargo workspace build output.
+/target/
+
+# Keep public documentation visible despite global rules.
+!/docs/
+# Host-local credentials are not part of the project.
+/.aws/
