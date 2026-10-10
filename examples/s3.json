@@ -1,0 +1,8 @@
+{
+  "type": "s3",
+  "endpoint": "https://s3.example.invalid",
+  "region": "us-east-1",
+  "bucket": "card-weave",
+  "access_key_env": "CARD_WEAVE_S3_ACCESS_KEY",
+  "secret_key_env": "CARD_WEAVE_S3_SECRET_KEY"
+}

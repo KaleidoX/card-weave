@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "display_name": "示例联系人",
+  "given_name": "联系人",
+  "family_name": "示例",
+  "phones": [{"label": "手机", "value": "+86 13800000000"}],
+  "emails": [{"label": "工作", "value": "demo@example.invalid"}],
+  "organization": "示例组织",
+  "notes": "虚构样本",
+  "dates": [
+    {"label": "生日", "calendar": "chinese_lunar", "year": null, "month": 2, "day": 29, "is_leap_month": true}
+  ]
+}

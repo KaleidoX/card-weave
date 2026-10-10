@@ -1,0 +1,6 @@
+{
+  "type": "webdav",
+  "endpoint": "https://storage.example.invalid/card-weave/",
+  "username_env": "CARD_WEAVE_DAV_USER",
+  "password_env": "CARD_WEAVE_DAV_PASSWORD"
+}
