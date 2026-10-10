@@ -1,6 +1,6 @@
 # 第三方依赖说明
 
-项目当前未选择自身开源许可证，也未发布可分发包。以下说明用于源码开发，不替代将来二进制分发所需的完整许可清单及通知。
+项目采用 [Apache-2.0 许可证](../LICENSE)，尚未发布可分发包。以下说明用于源码开发，不替代将来二进制分发所需的完整许可清单及通知。
 
 - LocalWeave（lfs-sqlite / lfs-protocol / lfs-storage）0.1.0：Git 子模块 `vendor/local-weave` 源码依赖，Apache-2.0，保留其 [LICENSE](../vendor/local-weave/LICENSE) 与 [第三方声明](../vendor/local-weave/docs/THIRD_PARTY.md)。
 - OpenDAL 0.59.4：通过 LocalWeave 存储适配器使用，Apache-2.0。

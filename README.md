@@ -61,6 +61,6 @@ Fs 后端配置为 `{"type":"fs","root":"/absolute/existing/shared-directory"}`�
 
 ## 协作与许可
 
-本项目尚未发布 crate、安装包或移动应用，项目许可证仍未选择。LocalWeave 及其他依赖保留各自许可，见[第三方说明](docs/THIRD_PARTY.md)。修改后运行开发指南中的相关检查；测试只能使用合成联系人和明确授权的存储。
+本项目采用 [Apache-2.0 许可证](LICENSE)，尚未发布 crate、安装包或移动应用。LocalWeave 及其他依赖保留各自许可，见[第三方说明](docs/THIRD_PARTY.md)。修改后运行开发指南中的相关检查；测试只能使用合成联系人和明确授权的存储。
 
 Git 忽略规则按目录维护：根目录处理 Cargo workspace 的 `target/`，`scripts/` 处理 Python 缓存，宿主 `.aws/` 目录整体排除。公开 `docs/` 不受本机全局忽略规则影响；私有任务资料、构建产物和本地配置不属于源码交付。
