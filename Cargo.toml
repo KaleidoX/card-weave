@@ -1,0 +1,20 @@
+[workspace]
+members = ["crates/core", "crates/cli"]
+exclude = ["vendor/local-weave"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+[workspace.dependencies]
+card-weave-core = { path = "crates/core" }
+lfs-sqlite = { path = "vendor/local-weave/core/sqlite", version = "=0.1.0", features = ["bundled"] }
+lfs-protocol = { path = "vendor/local-weave/core/protocol", version = "=0.1.0" }
+lfs-storage = { path = "vendor/local-weave/integrations/opendal", version = "=0.1.0", features = ["fs", "webdav", "s3"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+getrandom = "=0.4.3"
+tokio = { version = "=1.53.2", features = ["rt-multi-thread", "macros", "time", "sync"] }
