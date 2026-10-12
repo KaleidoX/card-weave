@@ -333,6 +333,14 @@ impl AddressBook {
                     &data.family_name,
                     &data.organization,
                     &data.notes,
+                    &data.name_prefix,
+                    &data.name_suffix,
+                    &data.phonetic_family_name,
+                    &data.phonetic_middle_name,
+                    &data.phonetic_given_name,
+                    &data.nickname,
+                    &data.job_title,
+                    &data.website,
                 ]
                 .iter()
                 .any(|s| s.to_lowercase().contains(&needle))
@@ -340,6 +348,9 @@ impl AddressBook {
                         .phones
                         .iter()
                         .chain(&data.emails)
+                        .chain(&data.addresses)
+                        .chain(&data.instant_messages)
+                        .chain(&data.relations)
                         .any(|v| v.value.to_lowercase().contains(&needle));
                 if !found {
                     continue;

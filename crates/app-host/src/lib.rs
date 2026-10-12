@@ -41,7 +41,7 @@ pub enum Command {
     Save {
         id: String,
         expected: ContactData,
-        contact: ContactData,
+        contact: Box<ContactData>,
     },
     Delete {
         id: String,
@@ -212,7 +212,7 @@ impl Host {
                     id,
                     expected,
                     contact,
-                } => encode(book.save_guarded(&id, &expected, Some(contact))?),
+                } => encode(book.save_guarded(&id, &expected, Some(*contact))?),
                 Command::Delete { id, expected } => {
                     encode(book.save_guarded(&id, &expected, None)?)
                 }

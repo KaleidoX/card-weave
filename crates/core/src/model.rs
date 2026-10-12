@@ -49,10 +49,32 @@ pub struct ContactData {
     pub middle_name: String,
     #[serde(default)]
     pub family_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name_prefix: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name_suffix: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub phonetic_family_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub phonetic_middle_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub phonetic_given_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub job_title: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub website: String,
     #[serde(default)]
     pub phones: Vec<LabeledValue>,
     #[serde(default)]
     pub emails: Vec<LabeledValue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addresses: Vec<LabeledValue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instant_messages: Vec<LabeledValue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relations: Vec<LabeledValue>,
     #[serde(default)]
     pub organization: String,
     #[serde(default)]
@@ -89,9 +111,17 @@ impl ContactData {
             &self.middle_name,
             &self.family_name,
             &self.organization,
+            &self.name_prefix,
+            &self.name_suffix,
+            &self.phonetic_family_name,
+            &self.phonetic_middle_name,
+            &self.phonetic_given_name,
+            &self.nickname,
+            &self.job_title,
         ] {
             text(name, 1024, false)?;
         }
+        text(&self.website, 4096, false)?;
         text(&self.notes, 32768, false)?;
         for items in [&self.phones, &self.emails] {
             if items.len() > 32 {
@@ -100,6 +130,19 @@ impl ContactData {
             for item in items {
                 text(&item.label, 128, false)?;
                 text(&item.value, 1024, true)?;
+            }
+        }
+        for (items, max_value) in [
+            (&self.addresses, 4096),
+            (&self.instant_messages, 1024),
+            (&self.relations, 1024),
+        ] {
+            if items.len() > 32 {
+                return Err(Error::Invalid("at most 32 entries per field"));
+            }
+            for item in items {
+                text(&item.label, 128, true)?;
+                text(&item.value, max_value, true)?;
             }
         }
         if self.dates.len() > 32 {
