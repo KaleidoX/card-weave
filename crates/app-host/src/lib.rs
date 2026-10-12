@@ -17,6 +17,9 @@ use std::{
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    ValidateContact {
+        contact: ContactData,
+    },
     RelationViews {
         contact: Box<ContactData>,
     },
@@ -188,6 +191,10 @@ impl Host {
                 return Err(Error::Invalid("request too large"));
             }
             let command: Command = serde_json::from_str(&request)?;
+            if let Command::ValidateContact { ref contact } = command {
+                contact.validate()?;
+                return encode(true);
+            }
             if let Command::CalendarDate {
                 ref calendar,
                 year,
@@ -223,7 +230,9 @@ impl Host {
                 Command::Migrate { destination } => {
                     encode(book.migrate_to(Path::new(&destination))?)
                 }
-                Command::CalendarOptions { .. } | Command::CalendarDate { .. } => unreachable!(),
+                Command::ValidateContact { .. }
+                | Command::CalendarOptions { .. }
+                | Command::CalendarDate { .. } => unreachable!(),
                 Command::Identity => encode(book.config()),
                 Command::List { search, offset } => encode(book.list(&search, 50, offset)?),
                 Command::Get { id } => encode(book.get(&id)?),

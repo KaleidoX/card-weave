@@ -21,6 +21,24 @@ fn public_host_serializes_identity_mutations_and_cancel_before_network() {
         command(&host, json!({"action":"identity"}))["data"],
         opened["data"]
     );
+    assert_eq!(
+        command(
+            &host,
+            json!({"action":"validate_contact","contact":{"version":2,"display_name":"Import fixture","dates":[{"kind":"birthday","label":"","calendar":"gregorian","year":null,"month":2,"day":29,"is_leap_month":false}]}})
+        )["data"],
+        true
+    );
+    assert_eq!(
+        command(
+            &host,
+            json!({"action":"validate_contact","contact":{"version":2,"display_name":""}})
+        )["ok"],
+        false
+    );
+    assert_eq!(
+        command(&host, json!({"action":"status"}))["data"]["pending_outbox"],
+        0
+    );
     let saved = command(
         &host,
         json!({"action":"create","contact":{"version":2,"display_name":"Host fixture"}}),

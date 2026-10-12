@@ -80,7 +80,7 @@ flutter test integration_test/android_flow_test.dart --no-pub --no-uninstall -d 
 
 新增日期默认设备本地今天，农历使用 Rust 换算出的对应年月日；已有日期不重置。日期采用类型选择和行内年月日滚轮，支持公历生日、农历生日、纪念日、其他、自定义。两种生日各限一个；日期可不指定年份，农历由 Rust 计算有效月份与日数，闰月直接作为月份选项，不提供手动闰月开关。指定农历年份支持 1901–2100；不指定年份时提供普通月/闰月并说明仅保留月日，补上年份后重新校验。已有日期切换历法时不自动换算；新增农历日期使用 Rust 换算出的今天。无效日期须重新选择；有效选择直接更新联系人草稿，未完成日期阻止页面保存；页面“取消 / 完成”统一管理草稿。自定义日期需填写名称。
 
-联系人使用 v2 数据格式（日期新增必填 kind）；本次按产品决定不兼容旧联系人 v1，不执行迁移或清空用户目录。旧联系人需在升级前自行导出处理；新版不会将其当作有效 v2 记录。系统通讯录导入和提醒仍后置，当前没有系统写入或提醒权限。
+联系人使用 v2 数据格式（日期新增必填 kind）；本次按产品决定不兼容旧联系人 v1，不执行迁移或清空用户目录。旧联系人需在升级前自行导出处理；新版不会将其当作有效 v2 记录。Android 支持从系统通讯录手动导入；系统写入、导出和提醒仍后置。
 
 公共组件布局回归：`flutter test --no-pub test/components_test.dart`（窄屏、200% 字号、深浅色）。开发预览为 `lib/ui/gallery.dart`，不出现在产品导航。
 
@@ -104,3 +104,22 @@ CARDWEAVE_ACCEPTANCE=1 flutter test integration_test/expanded_fields_test.dart -
 第二阶段 Android 验收：`CARDWEAVE_ACCEPTANCE=1 flutter test integration_test/groups_test.dart --no-pub -d DEVICE`，先以相同环境变量执行构建脚本。测试实例与普通应用隔离，不能使用普通 applicationId 运行会卸载实例的集成测试。
 
 WebDAV 设置将服务地址与同步目录分开填写。坚果云服务地址为 `https://dav.jianguoyun.com/dav/`，同步目录例如 `CardWeave`；留空使用服务根目录。首次同步逐层创建目录，不要求预先建立。既有坚果云地址在读取时按 `/dav/` 拆分，保持远端路径不变；其他服务旧地址原样保留，不猜测服务根路径。加入信息包含目录，所有设备需使用支持此字段的版本。
+
+
+## 系统通讯录导入
+
+从设置进入“导入系统通讯录”，点击读取并授权后查看预览。仅申请 `READ_CONTACTS`，不修改系统联系人，不自动上传。疑似重复项按整个本地通讯录（含冲突候选）和本次列表的姓名、电话、邮箱提示，默认不选；号码比较不猜测国家区号。确认导入会新建联系人，完成后可手动同步。
+
+标准字段包括姓名及细分、拼音、电话、邮箱、公司职位、地址、即时消息、网站、备注、手工关联人及标准公历日期（含无年份生日）。多个标量值、额外生日和无法解释的日期保留在备注并提示；超限记录禁止导入，不静默截断。头像、群组及未识别的厂商字段暂不转换。realme 日期策略已根据 RMX3800 上的原生通讯录 16.80.15 核对：支持公历、以公历日期为存储基准的农历生日、无年份生日及无年份闰月；农历转换统一调用 Rust 核心。未知或矛盾的历法标记保留原值和标记到备注，不猜测转换。此规则不代表其他厂商或所有 realme 版本已经验证。
+
+导入逐条保存，停止时保留已完成项；当前会话只重试明确失败项。未收到保存结果的条目标为待核对，须重新读取并检查重复提示，避免盲目重试。离开页面后再次导入会重新检查重复。
+
+`lib/system_contacts/contact_mapper.dart` 定义整条联系人的转换接口 `SystemContactMapper`。转换器接收汇总信息及完整明细，可以接管任意已支持字段、联合解释多个源字段，并返回联系人、提示和错误；不局限于日期。`AndroidContactsImportStrategy` 注入转换器，默认使用 `AndroidContactMapper`；`RealmeContactMapper` 复用标准字段规则并覆盖日期解码，也可继续扩展姓名、电话、地址等规则。
+
+扩展字段通过转换器的 `additionalMimeTypes` 显式声明，读取层仅传输已声明的厂商文本字段（DATA1–DATA14），未声明字段只报告 MIME；照片及二进制内容仍不导入。原始资料缺失/超限、联系人格式验证、Rust 校验和重复识别继续由公共导入链路执行。
+
+`lib/system_contacts/strategy.dart` 定义独立的导入与导出能力和按平台/厂商排序的策略注册表；页面及会话只依赖策略接口。realme 策略优先于通用 Android 策略，厂商转换器按 `lib/system_contacts/vendors/<厂商>/` 分目录维护：realme 的 `mapper.dart` 负责联系人转换，`dates.dart` 负责日期编码适配。通用 Android 策略通过 `SystemContacts.kt` 读取 Provider，再由独立映射模块转换；厂商策略可复用 Android 读取层并覆盖映射。iOS 及导出能力尚未注册，不能被显示为支持。不将 Android 特殊判断放入页面或 Rust 联系人模型。
+
+隔离 Android 验证入口为 `integration_test/system_contacts_test.dart`。只能在专用测试设备中准备包含 `Fixture` 名称、电话 `+1 202-555-0199`、邮箱 `cw-import@example.invalid`、公历生日 `--02-29` 及 `vnd.fixture/contact` 扩展行（DATA1=`Vendor fixture`）的合成 Provider 联系人并以 `CARDWEAVE_ACCEPTANCE=1`、正确 `CARDWEAVE_ABI` 运行；普通用户手机只安装默认应用包，由用户在页面授权和选择真实联系人。
+
+日期策略的原生回归入口为 `integration_test/realme_dates_test.dart`，使用合成编码验证真实 Rust 转换与保存重开，不读取系统通讯录。仅在隔离 Android 测试应用中运行。
