@@ -2,7 +2,7 @@
 
 ## 源码依赖
 
-LocalWeave 通过 `vendor/local-weave` Git 子模块接入，远端为 `https://github.com/KaleidoX/local-weave`，gitlink 固定 SDK 基线 commit `bffb081c6e9a80ad1e14583aab4db23850b814ce`。Cargo 仅引用子模块内部路径，不依赖仓库外的 SDK checkout。子模块保持自身 workspace，排除于 CardWeave workspace 成员之外。Cargo.lock 固定第三方依赖。
+LocalWeave 通过 `vendor/local-weave` Git 子模块接入，远端为 `git@github.com:KaleidoX/local-weave.git`，SDK 版本由仓库中的 gitlink 固定。Cargo 仅引用子模块内部路径，不依赖仓库外的 SDK checkout。子模块保持自身 workspace，排除于 CardWeave workspace 成员之外。Cargo.lock 固定第三方依赖。
 
 首次获取仓库可使用 `git clone --recurse-submodules <CardWeave 仓库地址>`；已有 checkout 执行：
 
