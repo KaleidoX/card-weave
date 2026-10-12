@@ -1,3 +1,7 @@
+import 'contacts/value_kind.dart';
+import 'contacts/fields.dart';
+import 'contacts/extra_fields.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -28,13 +32,27 @@ class _ContactEditorState extends State<ContactEditor> {
   late Map<String, dynamic> data = copy(
     widget.seed ?? widget.original?['data'] ?? emptyContact(),
   );
-  late final String initial = jsonEncode(data);
+  late final String initial = jsonEncode(contactDocument(data));
+  final scroll = ScrollController();
+  @override
+  void dispose() {
+    scroll.dispose();
+    super.dispose();
+  }
+
+  void update(String key, dynamic value) => setState(() {
+    data[key] = value;
+    data = contactDocument(data);
+  });
   bool saving = false,
       leaving = false,
       editingDate = false,
       pendingName = false;
   String? error;
-  bool get dirty => pendingName || editingDate || jsonEncode(data) != initial;
+  bool get dirty =>
+      pendingName ||
+      editingDate ||
+      jsonEncode(contactDocument(data)) != initial;
   Future<bool> discard() async =>
       !dirty ||
       await showCupertinoDialog<bool>(
@@ -66,7 +84,19 @@ class _ContactEditorState extends State<ContactEditor> {
   }
 
   Future<void> save() async {
-    if (!form.currentState!.validate()) return;
+    final valid = form.currentState!.validate();
+    final validation = contactValidationError(data);
+    if (!valid || validation != null) {
+      if (validation != null) {
+        setState(() => error = validation);
+        scroll.animateTo(
+          0,
+          duration: AppTokens.animation,
+          curve: Curves.easeOut,
+        );
+      }
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() {
       saving = true;
@@ -74,9 +104,12 @@ class _ContactEditorState extends State<ContactEditor> {
     });
     try {
       if (widget.conflict != null) {
-        await widget.model.resolve(widget.conflict!, data);
+        await widget.model.resolve(widget.conflict!, contactDocument(data));
       } else {
-        await widget.model.save(data, original: widget.original);
+        await widget.model.save(
+          contactDocument(data),
+          original: widget.original,
+        );
       }
       if (mounted) {
         setState(() => leaving = true);
@@ -153,147 +186,172 @@ class _ContactEditorState extends State<ContactEditor> {
               absorbing: saving,
               child: Form(
                 key: form,
-                child: ListView(
+                child: SingleChildScrollView(
+                  controller: scroll,
                   padding: AppTokens.pagePadding,
-                  children: [
-                    if (error != null)
-                      SurfaceBox(
-                        color: AppTheme.of(context).colors.errorContainer,
-                        child: Padding(
-                          padding: AppTokens.pagePadding,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(error!),
-                              if (widget.original != null)
-                                AppButton(
-                                  onPressed: () async {
-                                    try {
-                                      final fresh = await widget.model.get(
-                                        widget.original!['id'],
-                                      );
-                                      if (!context.mounted) return;
-                                      final reload =
-                                          await showCupertinoDialog<bool>(
-                                            context: context,
-                                            builder: (c) => AppDialog(
-                                              title: const Text('当前已保存内容'),
-                                              content: SingleChildScrollView(
-                                                child: fresh == null
-                                                    ? const Text('联系人已删除')
-                                                    : ContactContent(
-                                                        object(fresh['data']),
-                                                      ),
-                                              ),
-                                              actions: [
-                                                CupertinoDialogAction(
-                                                  onPressed: () =>
-                                                      Navigator.pop(c),
-                                                  child: const Text('返回草稿'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (error != null)
+                        SurfaceBox(
+                          color: AppTheme.of(context).colors.errorContainer,
+                          child: Padding(
+                            padding: AppTokens.pagePadding,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(error!),
+                                if (widget.original != null)
+                                  AppButton(
+                                    onPressed: () async {
+                                      try {
+                                        final fresh = await widget.model.get(
+                                          widget.original!['id'],
+                                        );
+                                        if (!context.mounted) return;
+                                        final reload =
+                                            await showCupertinoDialog<bool>(
+                                              context: context,
+                                              builder: (c) => AppDialog(
+                                                title: const Text('当前已保存内容'),
+                                                content: SingleChildScrollView(
+                                                  child: fresh == null
+                                                      ? const Text('联系人已删除')
+                                                      : ContactContent(
+                                                          object(fresh['data']),
+                                                        ),
                                                 ),
-                                                if (fresh != null &&
-                                                    fresh['has_conflict'] !=
-                                                        true)
+                                                actions: [
                                                   CupertinoDialogAction(
-                                                    isDefaultAction: true,
                                                     onPressed: () =>
-                                                        Navigator.pop(c, true),
-                                                    child: const Text(
-                                                      '放弃草稿，以最新内容编辑',
-                                                    ),
+                                                        Navigator.pop(c),
+                                                    child: const Text('返回草稿'),
                                                   ),
-                                              ],
+                                                  if (fresh != null &&
+                                                      fresh['has_conflict'] !=
+                                                          true)
+                                                    CupertinoDialogAction(
+                                                      isDefaultAction: true,
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            c,
+                                                            true,
+                                                          ),
+                                                      child: const Text(
+                                                        '放弃草稿，以最新内容编辑',
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            );
+                                        if (reload == true && context.mounted) {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            CupertinoPageRoute(
+                                              builder: (_) => ContactEditor(
+                                                widget.model,
+                                                original: fresh,
+                                              ),
                                             ),
                                           );
-                                      if (reload == true && context.mounted) {
-                                        Navigator.pushReplacement(
-                                          context,
-                                          CupertinoPageRoute(
-                                            builder: (_) => ContactEditor(
-                                              widget.model,
-                                              original: fresh,
-                                            ),
-                                          ),
-                                        );
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          setState(() => error = message(e));
+                                        }
                                       }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        setState(() => error = message(e));
-                                      }
-                                    }
-                                  },
-                                  child: const Text('查看最新内容'),
-                                ),
-                            ],
+                                    },
+                                    child: const Text('查看最新内容'),
+                                  ),
+                              ],
+                            ),
                           ),
+                        ),
+                      ContactNameGroup(
+                        data: data,
+                        onPendingChanged: (value) =>
+                            setState(() => pendingName = value),
+                        onChanged: (values) => setState(() {
+                          data.addAll(values);
+                          data = contactDocument(data);
+                        }),
+                      ),
+                      const SizedBox(height: AppTokens.section),
+                      ContactValuesGroup(
+                        initial: data['phones'] as List,
+                        kind: ContactValueKind.phone,
+                        onChanged: (values) => update('phones', values),
+                      ),
+                      const SizedBox(height: AppTokens.section),
+                      ContactValuesGroup(
+                        initial: data['emails'] as List,
+                        kind: ContactValueKind.email,
+                        onChanged: (values) => update('emails', values),
+                      ),
+                      const SizedBox(height: AppTokens.section),
+                      AppGroup(
+                        alignment: AppAlignment.icon,
+                        children: [
+                          AppFieldRow(
+                            icon: CupertinoIcons.building_2_fill,
+                            child: AppInput(
+                              label: '公司',
+                              labelVisible: false,
+                              inline: true,
+                              initialValue: data['organization'],
+                              validator: (v) => contactTextError(v),
+                              onChanged: (v) => update('organization', v),
+                            ),
+                          ),
+                          AppFieldRow(
+                            child: AppInput(
+                              label: '职位',
+                              labelVisible: false,
+                              inline: true,
+                              initialValue: data['job_title'] as String? ?? '',
+                              validator: (v) => contactTextError(v),
+                              onChanged: (v) => update('job_title', v),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppTokens.section),
+                      dates(),
+                      const SizedBox(height: AppTokens.section),
+                      AppGroup(
+                        alignment: AppAlignment.icon,
+                        children: [
+                          AppFieldRow(
+                            icon: CupertinoIcons.text_alignleft,
+                            child: AppInput(
+                              label: '备注',
+                              labelVisible: false,
+                              inline: true,
+                              minLines: 3,
+                              initialValue: data['notes'],
+                              validator: (v) =>
+                                  contactTextError(v, maxBytes: 32768),
+                              onChanged: (v) => update('notes', v),
+                            ),
+                          ),
+                        ],
+                      ),
+                      ContactExtraFields(
+                        data: data,
+                        onChanged: update,
+                        model: widget.model,
+                        contactId: widget.original?['id'] as String?,
+                      ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          saving ? '正在保存到本机，请稍候。' : '保存到本机后，可在同步页面手动上传。',
+                          style: AppTheme.of(context).text.bodySmall,
                         ),
                       ),
-                    ContactNameGroup(
-                      data: data,
-                      onPendingChanged: (value) =>
-                          setState(() => pendingName = value),
-                      onChanged: (values) =>
-                          setState(() => data.addAll(values)),
-                    ),
-                    const SizedBox(height: AppTokens.section),
-                    ContactValuesGroup(
-                      initial: data['phones'] as List,
-                      email: false,
-                      onChanged: (values) =>
-                          setState(() => data['phones'] = values),
-                    ),
-                    const SizedBox(height: AppTokens.section),
-                    ContactValuesGroup(
-                      initial: data['emails'] as List,
-                      email: true,
-                      onChanged: (values) =>
-                          setState(() => data['emails'] = values),
-                    ),
-                    const SizedBox(height: AppTokens.section),
-                    AppGroup(
-                      alignment: AppAlignment.icon,
-                      children: [
-                        AppFieldRow(
-                          icon: CupertinoIcons.building_2_fill,
-                          child: AppInput(
-                            label: '公司',
-                            labelVisible: false,
-                            inline: true,
-                            initialValue: data['organization'],
-                            onChanged: (v) =>
-                                setState(() => data['organization'] = v),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppTokens.section),
-                    dates(),
-                    const SizedBox(height: AppTokens.section),
-                    AppGroup(
-                      alignment: AppAlignment.icon,
-                      children: [
-                        AppFieldRow(
-                          icon: CupertinoIcons.text_alignleft,
-                          child: AppInput(
-                            label: '备注',
-                            labelVisible: false,
-                            inline: true,
-                            minLines: 3,
-                            initialValue: data['notes'],
-                            onChanged: (v) => setState(() => data['notes'] = v),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        saving ? '正在保存到本机，请稍候。' : '保存到本机后，可在同步页面手动上传。',
-                        style: AppTheme.of(context).text.bodySmall,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

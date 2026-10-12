@@ -5,8 +5,13 @@ import 'package:flutter/cupertino.dart';
 
 import 'src/rust/frb_generated.dart';
 import 'model.dart';
+import 'groups/pages.dart';
+import 'contacts/relations_view.dart';
+import 'groups/contact_groups.dart';
+import 'groups/conflict_page.dart';
 import 'editor.dart';
 import 'contacts/contact_content.dart';
+import 'contacts/fields.dart';
 import 'settings.dart';
 import 'design.dart';
 import 'contacts/date_format.dart' show dateType, dateText;
@@ -128,7 +133,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Widget conflictBanner() => SurfaceBox(
     child: AppRow(
       leading: const Icon(CupertinoIcons.square_stack),
-      title: Text('${m.conflicts.length} 位联系人需要处理冲突'),
+      title: Text('${m.conflicts.length} 项资料需要处理冲突'),
       subtitle: const Text('多个版本会保留，直到你作出选择'),
       trailing: const Icon(CupertinoIcons.chevron_forward),
       onTap: () => Navigator.push(
@@ -138,7 +143,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
   );
   Widget contacts() => LargeTitlePage(
-    title: '联系人',
+    title: m.groupTitle,
+    leading: m.supportsGroups
+        ? AppButton(
+            onPressed: () => Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => GroupLists(m)),
+            ),
+            child: const Text('列表'),
+          )
+        : null,
     trailing: AppIconButton(
       tooltip: '新建联系人',
       onPressed: openEditor,
@@ -546,7 +560,39 @@ class _ContactDetailState extends State<ContactDetail> {
                           ).then((_) => load()),
                         ),
                       ),
-                    ContactContent(object(contact!['data']), showHero: true),
+                    ContactContent(
+                      object(contact!['data']),
+                      showHero: true,
+                      includeRelations: false,
+                    ),
+                    if (widget.model.supportsGroups)
+                      AppGroup(
+                        children: [
+                          AppRow(
+                            title: const Text('群组'),
+                            onTap: () => Navigator.push(
+                              context,
+                              CupertinoPageRoute(
+                                builder: (_) =>
+                                    ContactGroups(widget.model, widget.id),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ContactRelationsView(
+                      widget.model,
+                      object(contact!['data']),
+                      onOpen: (id) async {
+                        await Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (_) => ContactDetail(widget.model, id),
+                          ),
+                        );
+                        await load();
+                      },
+                    ),
                     const SizedBox(height: 24),
                     AppButton.icon(
                       onPressed: contact!['has_conflict'] == true
@@ -614,9 +660,24 @@ class ConflictList extends StatelessWidget {
               children: [
                 const Padding(
                   padding: AppTokens.pagePadding,
-                  child: Text('同一联系人在不同设备上被修改。请选择保留的完整版本，或编辑合并结果。'),
+                  child: Text('资料在不同设备上被修改。请选择保留的版本或编辑合并结果。'),
                 ),
                 ...model.conflicts.map((conflict) {
+                  if (conflict['entity_type'] != null) {
+                    return AppRow(
+                      title: Text(
+                        conflict['entity_type'] == 'group' ? '群组冲突' : '成员关系冲突',
+                      ),
+                      subtitle: Text(conflict['title'] as String? ?? ''),
+                      onTap: () => Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) =>
+                              EntityConflictPage(model, copy(conflict)),
+                        ),
+                      ),
+                    );
+                  }
                   final candidates = conflict['candidates'] as List;
                   final named = candidates.where((c) => c['contact'] != null);
                   return Padding(
@@ -668,7 +729,7 @@ class _ConflictPageState extends State<ConflictPage> {
   @override
   Widget build(BuildContext context) {
     final candidates = widget.conflict['candidates'] as List;
-    final keys = emptyContact().keys.where((key) => key != 'version');
+    final keys = contactFieldLabels.keys;
     final differences = {
       for (final k in keys)
         if (candidates.any((c) {
@@ -720,19 +781,7 @@ class _ConflictPageState extends State<ConflictPage> {
                       for (final field in differences)
                         AppInfoRow(
                           changed: true,
-                          label:
-                              (const {
-                                'display_name': '姓名',
-                                'given_name': '名字',
-                                'middle_name': '中间名',
-                                'family_name': '姓氏',
-                                'organization': '公司',
-                                'phones': '电话',
-                                'emails': '邮箱',
-                                'dates': '重要日期',
-                                'notes': '备注',
-                              }[field] ??
-                              field),
+                          label: contactFieldLabels[field] ?? field,
                           value: (conflictValue(
                             object(candidates[i]['contact']['data']),
                             field,
@@ -745,6 +794,11 @@ class _ConflictPageState extends State<ConflictPage> {
                             object(candidates[i]['contact']['data']),
                             differences: differences,
                             grouped: false,
+                          ),
+                          ContactRelationsView(
+                            widget.model,
+                            object(candidates[i]['contact']['data']),
+                            comparison: true,
                           ),
                         ],
                       ),
@@ -856,7 +910,13 @@ String conflictValue(Map<String, dynamic> data, String field) {
   if (value is List) {
     return value.isEmpty
         ? '未填写'
-        : value.map((v) => '${v['label']}  ${v['value']}'.trim()).join('\n');
+        : value
+              .map(
+                (v) =>
+                    '${v['label']}  ${v['value']}${v['target_contact_id'] == null ? '' : ' · 关联 ID：${v['target_contact_id']}'}'
+                        .trim(),
+              )
+              .join('\n');
   }
   return value == null || value == '' ? '未填写' : value.toString();
 }

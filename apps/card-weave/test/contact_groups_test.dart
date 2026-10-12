@@ -1,3 +1,4 @@
+import 'package:card_weave/contacts/value_kind.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:card_weave/contacts/name_group.dart';
@@ -41,7 +42,7 @@ void main() {
           home: CupertinoPageScaffold(
             child: ContactValuesGroup(
               initial: const [],
-              email: false,
+              kind: ContactValueKind.phone,
               onChanged: (v) => changed = v,
             ),
           ),

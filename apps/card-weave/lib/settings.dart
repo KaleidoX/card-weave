@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import 'model.dart';
+import 'groups/upgrade.dart';
 import 'design.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -110,6 +111,23 @@ class _SettingsPageState extends State<SettingsPage> {
       child: GroupedPageList(
         title: '设置',
         children: [
+          if (!widget.model.supportsGroups)
+            AppGroup(
+              children: [
+                AppRow(
+                  title: const Text('升级通讯录以使用群组'),
+                  onTap: () =>
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) => UpgradeBookPage(widget.model),
+                        ),
+                      ).then((_) {
+                        if (mounted) setState(() {});
+                      }),
+                ),
+              ],
+            ),
           const SectionLabel('远端连接'),
           const SizedBox(height: 8),
           const Text('使用你自己的 HTTPS WebDAV 或 S3 兼容存储。所有设备需使用同一通讯录加入信息与同步位置。'),

@@ -14,8 +14,11 @@ Map<String, dynamic> copy(Map<String, dynamic> value) =>
 String message(Object error) {
   final code = error is AppFailure ? error.code : 'unknown';
   return switch (code) {
-    'edit_stale' => '联系人已发生变化。草稿已保留，请查看最新内容后重新编辑。',
-    'conflict_requires_resolution' => '联系人有多个版本，请到冲突页面处理。草稿已保留。',
+    'duplicate_group_name' => '已有同名群组，请使用其他名称。',
+    'legacy_join' => '这是旧通讯录的加入信息。请在原设备升级后复制新的加入信息。',
+    'migration_not_ready' => '请先完成同步并解决全部冲突，再升级通讯录。',
+    'edit_stale' => '资料已发生变化。当前选择或草稿已保留，请查看最新内容后重新编辑。',
+    'conflict_requires_resolution' => '资料有多个版本，请到冲突页面处理。当前选择或草稿已保留。',
     'invalid_input' => '内容或配置不符合要求，请检查字段、日期和服务器地址。',
     'authentication' => '认证失败，请检查账号、密码或访问密钥。',
     'cancelled' => '同步已取消；已完成的更改仍然保留。',
@@ -90,6 +93,13 @@ class AppModel extends ChangeNotifier {
       loading = false;
   String? startupError, listError, syncMessage, lastSync;
   String search = '';
+  String? group;
+  String groupTitle = '联系人';
+  String bookName = 'book';
+  String? _stampDataset;
+  bool get supportsGroups => identity['version'] == 2;
+  Future<dynamic> groups(Map<String, dynamic> request) =>
+      command('groups', {'request': request});
   int generation = 0;
   List<Map<String, dynamic>> contacts = [], conflicts = [];
   Map<String, dynamic> identity = {},
@@ -109,9 +119,21 @@ class AppModel extends ChangeNotifier {
       directory = Directory(
         await (await getApplicationSupportDirectory()).resolveSymbolicLinks(),
       );
+      final active = File('${directory.path}/active-book.txt');
+      if (await active.exists()) {
+        bookName = (await active.readAsString()).trim();
+        if (!RegExp(r'^book(?:-[0-9]+)?$').hasMatch(bookName)) {
+          throw AppFailure('invalid_input');
+        }
+      }
       final stamp = File('${directory.path}/last-sync.txt');
       if (await stamp.exists()) {
-        lastSync = await stamp.readAsString();
+        final saved = await stamp.readAsString();
+        final parts = saved.split('\n');
+        if (parts.length == 2) {
+          lastSync = parts[1];
+          _stampDataset = parts[0];
+        }
       }
       final file = File('${directory.path}/sync.json');
       if (await file.exists()) {
@@ -128,11 +150,12 @@ class AppModel extends ChangeNotifier {
           syncMessage = '无法读取已保存凭据，请在设置中重新输入。';
         }
       }
-      if (!initialized && await Directory('${directory.path}/book').exists()) {
+      if (!initialized &&
+          await Directory('${directory.path}/$bookName').exists()) {
         identity = object(
           unwrap(
             await host.initialize(
-              path: '${directory.path}/book',
+              path: '${directory.path}/$bookName',
               create: false,
             ),
           ),
@@ -140,6 +163,7 @@ class AppModel extends ChangeNotifier {
         initialized = true;
       }
       if (initialized) {
+        if (_stampDataset != identity['dataset']) lastSync = null;
         await refresh();
       }
     } catch (e) {
@@ -149,9 +173,51 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> migrate() async {
+    final oldName = bookName;
+    final next = 'book-${DateTime.now().microsecondsSinceEpoch}';
+    await command('migrate', {'destination': '${directory.path}/$next'});
+    await command('close');
+    try {
+      final nextIdentity = object(
+        unwrap(
+          await host.initialize(path: '${directory.path}/$next', create: false),
+        ),
+      );
+      final temp = File('${directory.path}/active-book.txt.tmp');
+      await temp.writeAsString(next, flush: true);
+      await temp.rename('${directory.path}/active-book.txt');
+      bookName = next;
+      identity = nextIdentity;
+    } catch (_) {
+      try {
+        await command('close');
+      } catch (_) {}
+      identity = object(
+        unwrap(
+          await host.initialize(
+            path: '${directory.path}/$oldName',
+            create: false,
+          ),
+        ),
+      );
+      rethrow;
+    }
+    lastSync = null;
+    syncMessage = '升级完成。请手动同步，并将新的加入信息提供给其他设备。';
+    try {
+      final stamp = File('${directory.path}/last-sync.txt');
+      if (await stamp.exists()) await stamp.delete();
+    } catch (_) {}
+    group = null;
+    groupTitle = '联系人';
+    await refresh();
+  }
+
   Future<void> create([Map<String, dynamic>? join]) async {
+    if (join?['format'] == 'card-weave-join/1') throw AppFailure('legacy_join');
     if (join != null &&
-        (join['format'] != 'card-weave-join/1' || join['dataset'] is! String)) {
+        (join['format'] != 'card-weave-join/2' || join['dataset'] is! String)) {
       throw AppFailure('invalid_input');
     }
     Map<String, dynamic>? backend;
@@ -162,7 +228,7 @@ class AppModel extends ChangeNotifier {
     identity = object(
       unwrap(
         await host.initialize(
-          path: '${directory.path}/book',
+          path: '${directory.path}/$bookName',
           create: true,
           dataset: join?['dataset'] as String?,
         ),
@@ -183,6 +249,11 @@ class AppModel extends ChangeNotifier {
   Future<void> refresh() async {
     status = object(await command('status'));
     conflicts = (await command('conflicts') as List).map(object).toList();
+    if (supportsGroups) {
+      conflicts.addAll(
+        (await groups({'operation': 'conflicts'}) as List).map(object),
+      );
+    }
     await load(reset: true);
   }
 
@@ -196,10 +267,18 @@ class AppModel extends ChangeNotifier {
     listError = null;
     notifyListeners();
     try {
-      final page = (await command('list', {
-        'search': search,
-        'offset': contacts.length,
-      }) as List).map(object).toList();
+      final result = supportsGroups
+          ? await groups({
+              'operation': 'contacts',
+              'group': group,
+              'search': search,
+              'offset': contacts.length,
+            })
+          : await command('list', {
+              'search': search,
+              'offset': contacts.length,
+            });
+      final page = (result as List).map(object).toList();
       if (ticket != generation) {
         return;
       }
@@ -346,7 +425,7 @@ class AppModel extends ChangeNotifier {
         lastSync = DateTime.now().toIso8601String();
         try {
           await File('${directory.path}/last-sync.txt')
-              .writeAsString(lastSync!, flush: true);
+              .writeAsString('${identity['dataset']}\n$lastSync', flush: true);
         } catch (_) {
           /* Sync already committed; an optional timestamp must not report data failure. */
         }
@@ -374,7 +453,7 @@ class AppModel extends ChangeNotifier {
   }
 
   String joinText() => jsonEncode({
-    'format': 'card-weave-join/1',
+    'format': supportsGroups ? 'card-weave-join/2' : 'card-weave-join/1',
     'dataset': identity['dataset'],
     if (config.isNotEmpty) 'backend': publicBackend(config),
   });

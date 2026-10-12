@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         buildConfigField("boolean", "SOFTWARE_RENDERING", (System.getenv("CARDWEAVE_SOFTWARE_RENDERING") == "1").toString())
-        applicationId = "io.cardweave.app"
+        applicationId = if (System.getenv("CARDWEAVE_ACCEPTANCE") == "1") "io.cardweave.app.acceptance" else "io.cardweave.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

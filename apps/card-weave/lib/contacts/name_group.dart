@@ -1,18 +1,29 @@
 import 'package:flutter/cupertino.dart';
 
 import '../design.dart';
+import 'fields.dart';
 
 String composeContactName(Map<String, String> parts) {
-  final present = parts.values.where((v) => v.trim().isNotEmpty).toList();
+  final present = [
+    'family_name',
+    'middle_name',
+    'given_name',
+  ].map((k) => parts[k] ?? '').where((v) => v.trim().isNotEmpty).toList();
   final chinese =
       present.isNotEmpty &&
       present.every((v) => RegExp(r'^[\u3400-\u9fff]+$').hasMatch(v.trim()));
-  return (chinese
-          ? ['family_name', 'middle_name', 'given_name']
-          : ['given_name', 'middle_name', 'family_name'])
-      .map((k) => parts[k]!.trim())
-      .where((v) => v.isNotEmpty)
-      .join(chinese ? '' : ' ');
+  final body =
+      (chinese
+              ? ['family_name', 'middle_name', 'given_name']
+              : ['given_name', 'middle_name', 'family_name'])
+          .map((k) => (parts[k] ?? '').trim())
+          .where((v) => v.isNotEmpty)
+          .join(chinese ? '' : ' ');
+  return [
+    parts['name_prefix'] ?? '',
+    body,
+    parts['name_suffix'] ?? '',
+  ].map((v) => v.trim()).where((v) => v.isNotEmpty).join(' ');
 }
 
 class ContactNameGroup extends StatefulWidget {
@@ -38,7 +49,13 @@ class _ContactNameGroupState extends State<ContactNameGroup> {
   void initState() {
     super.initState();
     parts = {
-      for (final k in ['family_name', 'middle_name', 'given_name'])
+      for (final k in [
+        'name_prefix',
+        'family_name',
+        'middle_name',
+        'given_name',
+        'name_suffix',
+      ])
         k: widget.data[k] as String? ?? '',
     };
     originalParts = Map.of(parts);
@@ -105,6 +122,7 @@ class _ContactNameGroupState extends State<ContactNameGroup> {
                         labelVisible: false,
                         inline: true,
                         initialValue: display,
+                        validator: (v) => contactTextError(v, required: true),
                         onChanged: (v) {
                           setState(() {
                             display = v;
@@ -116,15 +134,17 @@ class _ContactNameGroupState extends State<ContactNameGroup> {
               )
             else
               for (final entry in {
+                'name_prefix': '姓名前缀',
                 'family_name': '姓氏',
                 'middle_name': '中间名',
                 'given_name': '名字',
+                'name_suffix': '姓名后缀',
               }.entries)
                 AppFieldRow(
-                  icon: entry.key == 'family_name'
+                  icon: entry.key == 'name_prefix'
                       ? CupertinoIcons.person
                       : null,
-                  trailing: entry.key == 'family_name'
+                  trailing: entry.key == 'name_prefix'
                       ? AppIconButton(
                           tooltip: '收起姓名细分',
                           onPressed: expand,
@@ -140,6 +160,7 @@ class _ContactNameGroupState extends State<ContactNameGroup> {
                     labelVisible: false,
                     inline: true,
                     initialValue: parts[entry.key],
+                    validator: (v) => contactTextError(v),
                     onChanged: (v) => changePart(entry.key, v),
                   ),
                 ),

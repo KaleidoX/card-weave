@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 
 import '../tokens.dart';
@@ -50,7 +52,10 @@ class _AppLabelDialogState extends State<AppLabelDialog> {
         child: const Text('取消'),
       ),
       CupertinoDialogAction(
-        onPressed: text.text.trim().isEmpty || text.text.length > 256
+        onPressed:
+            text.text.trim().isEmpty ||
+                utf8.encode(text.text.trim()).length > 128 ||
+                text.text.contains('\u0000')
             ? null
             : () => Navigator.pop(context, text.text.trim()),
         child: const Text('完成'),
