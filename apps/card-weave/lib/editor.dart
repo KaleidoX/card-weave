@@ -3,9 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'model.dart';
-
-String dateText(Map<String, dynamic> d) =>
-    '${d['calendar'] == 'chinese_lunar' ? '农历' : '公历'} ${d['year'] ?? '未知年'}年 ${d['is_leap_month'] == true ? '闰' : ''}${d['month']}月${d['day']}日';
+import 'date_picker.dart';
 
 class ContactContent extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -53,7 +51,7 @@ class ContactContent extends StatelessWidget {
           'dates',
           '重要日期',
           (data['dates'] as List)
-              .map((e) => '${e['label']} · ${dateText(object(e))}')
+              .map((e) => '${dateType(object(e))} · ${dateText(object(e))}')
               .join('\n'),
         ),
         item('notes', '备注', data['notes'] as String? ?? ''),
@@ -82,9 +80,9 @@ class _ContactEditorState extends State<ContactEditor> {
     widget.seed ?? widget.original?['data'] ?? emptyContact(),
   );
   late final String initial = jsonEncode(data);
-  bool saving = false, leaving = false;
+  bool saving = false, leaving = false, editingDate = false;
   String? error;
-  bool get dirty => jsonEncode(data) != initial;
+  bool get dirty => editingDate || jsonEncode(data) != initial;
   Future<bool> discard() async =>
       !dirty ||
       await showDialog<bool>(
@@ -206,147 +204,18 @@ class _ContactEditorState extends State<ContactEditor> {
     padding: const EdgeInsets.only(top: 24, bottom: 12),
     child: Text(title, style: Theme.of(context).textTheme.titleMedium),
   );
-  Widget dates() {
-    final dates = data['dates'] as List;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        section('重要日期'),
-        for (var i = 0; i < dates.length; i++)
-          Card(
-            key: ObjectKey(dates[i]),
-            margin: const EdgeInsets.only(bottom: 12),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          initialValue: dates[i]['label'],
-                          decoration: const InputDecoration(labelText: '日期名称'),
-                          validator: (v) =>
-                              (v ?? '').trim().isEmpty ? '请填写名称' : null,
-                          onChanged: (v) =>
-                              setState(() => dates[i]['label'] = v),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '删除日期',
-                        onPressed: () => setState(() => dates.removeAt(i)),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: dates[i]['calendar'],
-                    decoration: const InputDecoration(labelText: '历法'),
-                    items: const [
-                      DropdownMenuItem(value: 'gregorian', child: Text('公历')),
-                      DropdownMenuItem(
-                        value: 'chinese_lunar',
-                        child: Text('农历'),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() {
-                      dates[i]['calendar'] = v;
-                      if (v == 'gregorian') dates[i]['is_leap_month'] = false;
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final p in [
-                        ('year', '年（可留空）'),
-                        ('month', '月'),
-                        ('day', '日'),
-                      ])
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: TextFormField(
-                              initialValue: dates[i][p.$1]?.toString() ?? '',
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(labelText: p.$2),
-                              onChanged: (v) => setState(
-                                () =>
-                                    dates[i][p.$1] = v.isEmpty && p.$1 == 'year'
-                                    ? null
-                                    : int.tryParse(v) ?? 0,
-                              ),
-                              validator: (v) {
-                                final n = int.tryParse(v ?? '');
-                                if (p.$1 == 'year' && (v ?? '').isEmpty) {
-                                  return null;
-                                }
-                                if (p.$1 == 'day' && n != null) {
-                                  final d = dates[i];
-                                  final y = d['year'] as int?;
-                                  final leap =
-                                      y == null ||
-                                      (y % 4 == 0 &&
-                                          (y % 100 != 0 || y % 400 == 0));
-                                  final maxDay =
-                                      d['calendar'] == 'chinese_lunar'
-                                      ? 30
-                                      : d['month'] == 2
-                                      ? (leap ? 29 : 28)
-                                      : [4, 6, 9, 11].contains(d['month'])
-                                      ? 30
-                                      : 31;
-                                  if (n > maxDay) return '该月最多 $maxDay 天';
-                                }
-                                return n == null ||
-                                        n < 1 ||
-                                        n >
-                                            (p.$1 == 'year'
-                                                ? 9999
-                                                : p.$1 == 'month'
-                                                ? 12
-                                                : 31)
-                                    ? '超出范围'
-                                    : null;
-                              },
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (dates[i]['calendar'] == 'chinese_lunar')
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('闰月'),
-                      value: dates[i]['is_leap_month'] == true,
-                      onChanged: (v) =>
-                          setState(() => dates[i]['is_leap_month'] = v),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        TextButton.icon(
-          onPressed: dates.length >= 32
-              ? null
-              : () => setState(
-                  () => dates.add({
-                    'label': '生日',
-                    'calendar': 'gregorian',
-                    'year': null,
-                    'month': 1,
-                    'day': 1,
-                    'is_leap_month': false,
-                  }),
-                ),
-          icon: const Icon(Icons.add),
-          label: const Text('添加日期'),
-        ),
-        const Text('未知年份可留空；农历按原始日期保存，不自动换算。'),
-      ],
-    );
-  }
+  Widget dates() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      section('重要日期'),
+      ContactDatesEditor(
+        dates: data['dates'] as List,
+        options: widget.model.calendarOptions,
+        onEditingChanged: (value) => setState(() => editingDate = value),
+        onChanged: (value) => setState(() => data['dates'] = value),
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) => PopScope(

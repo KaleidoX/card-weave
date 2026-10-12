@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:card_weave/main.dart';
@@ -31,6 +32,7 @@ void main() {
       Future<void> tap(String text) async {
         final f = find.text(text).last;
         await tester.ensureVisible(f);
+        await tester.pumpAndSettle();
         await tester.tap(f);
         await tester.pumpAndSettle();
       }
@@ -40,6 +42,7 @@ void main() {
           (w) => w is TextField && w.decoration?.labelText == label,
         );
         await tester.ensureVisible(f);
+        await tester.pumpAndSettle();
         await tester.enterText(f, value);
         await tester.pump();
       }
@@ -60,11 +63,18 @@ void main() {
         await tap('新建联系人');
         await enter('姓名', '待删除的验证联系人');
         await tap('添加日期');
-        await tap('公历');
-        await tap('农历');
-        await tester.ensureVisible(find.text('闰月'));
-        await tester.tap(find.byType(Checkbox));
+        await tap('公历生日');
+        await tap('农历生日');
+        await tester.ensureVisible(find.text('请选择'));
+        await tester.drag(find.text('请选择'), const Offset(0, -44));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byType(CupertinoPicker).first);
+        await tester.drag(
+          find.byType(CupertinoPicker).first,
+          const Offset(0, -44),
+        );
+        await tester.pumpAndSettle();
+        await tap('确定');
         await tap('保存');
         await waitFor(() => model.contacts.length == 2);
         final lunar = model.contacts
@@ -105,6 +115,7 @@ void main() {
       await tap('添加邮箱');
       await enter('邮箱', 'fixture@example.invalid');
       await tap('添加日期');
+      await tap('确定');
       await tap('保存');
       await waitFor(() => model.contacts.length == 1);
       expect(

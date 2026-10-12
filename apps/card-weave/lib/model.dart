@@ -45,7 +45,7 @@ dynamic unwrap(String text) {
 }
 
 Map<String, dynamic> emptyContact() => {
-  'version': 1,
+  'version': 2,
   'display_name': '',
   'given_name': '',
   'family_name': '',
@@ -220,6 +220,13 @@ class AppModel extends ChangeNotifier {
     final result = await command('get', {'id': id});
     return result == null ? null : object(result);
   }
+
+  Future<Map<String, dynamic>> calendarOptions(
+    String calendar,
+    int? year,
+  ) async => object(
+    await command('calendar_options', {'calendar': calendar, 'year': year}),
+  );
 
   Future<void> save(
     Map<String, dynamic> data, {
