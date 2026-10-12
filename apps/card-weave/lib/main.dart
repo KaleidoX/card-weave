@@ -142,129 +142,132 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ),
     ),
   );
-  Widget contacts() => LargeTitlePage(
-    title: m.groupTitle,
-    leading: m.supportsGroups
-        ? AppButton(
-            onPressed: () => Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => GroupLists(m)),
-            ),
-            child: const Text('列表'),
-          )
-        : null,
-    trailing: AppIconButton(
-      tooltip: '新建联系人',
-      onPressed: openEditor,
-      icon: const Icon(CupertinoIcons.add),
-    ),
-    slivers: [
-      CupertinoSliverRefreshControl(onRefresh: m.refresh),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppSearchField(
-                controller: search,
-                onClear: () {
-                  debounce?.cancel();
-                  search.clear();
-                  m.search = '';
-                  m.load(reset: true);
-                },
-                onChanged: (v) {
-                  debounce?.cancel();
-                  debounce = Timer(const Duration(milliseconds: 250), () {
-                    m.search = v;
-                    m.load(reset: true);
-                  });
-                },
+  Widget contacts() => AppPagination(
+    enabled: tab == 0 && m.more && !m.loading && m.listError == null,
+    onLoad: () => m.load(),
+    builder: (context, controller) => LargeTitlePage(
+      controller: controller,
+      title: m.groupTitle,
+      leading: m.supportsGroups
+          ? AppButton(
+              onPressed: () => Navigator.push(
+                context,
+                CupertinoPageRoute(builder: (_) => GroupLists(m)),
               ),
-              if (m.conflicts.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: conflictBanner(),
-                ),
-              if (savedMessage != null)
-                AppStatus(savedMessage!, kind: AppStatusKind.success),
-              if (m.listError != null)
-                AppStatus(
-                  m.listError!,
-                  kind: AppStatusKind.error,
-                  onRetry: () => m.load(reset: true),
-                ),
-            ],
-          ),
-        ),
+              child: const Text('列表'),
+            )
+          : null,
+      trailing: AppIconButton(
+        tooltip: '新建联系人',
+        onPressed: openEditor,
+        icon: const Icon(CupertinoIcons.add),
       ),
-      if (m.contacts.isEmpty && !m.loading)
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: AppEmptyState(
-            m.search.isEmpty ? '还没有联系人' : '没有找到匹配的联系人',
-            message: m.search.isEmpty ? '轻点右上角 ＋ 添加第一位联系人。' : '试试其他姓名或联系方式。',
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: m.refresh),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSearchField(
+                  controller: search,
+                  onClear: () {
+                    debounce?.cancel();
+                    search.clear();
+                    m.search = '';
+                    m.load(reset: true);
+                  },
+                  onChanged: (v) {
+                    debounce?.cancel();
+                    debounce = Timer(const Duration(milliseconds: 250), () {
+                      m.search = v;
+                      m.load(reset: true);
+                    });
+                  },
+                ),
+                if (m.conflicts.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: conflictBanner(),
+                  ),
+                if (savedMessage != null)
+                  AppStatus(savedMessage!, kind: AppStatusKind.success),
+                if (m.listError != null)
+                  AppStatus(
+                    m.listError!,
+                    kind: AppStatusKind.error,
+                    onRetry: () => m.load(),
+                  ),
+              ],
+            ),
           ),
         ),
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverList.builder(
-          itemCount: m.contacts.length,
-          itemBuilder: (context, i) {
-            final contact = m.contacts[i], data = object(contact['data']);
-            final phones = data['phones'] as List,
-                emails = data['emails'] as List;
-            final name = data['display_name'] as String;
-            final subtitle = phones.isNotEmpty
-                ? phones.first['value'] as String
-                : emails.isNotEmpty
-                ? emails.first['value'] as String
-                : data['organization'] as String;
-            return AppListItem(
-              first: i == 0,
-              last: i == m.contacts.length - 1,
-              alignment: AppAlignment.avatar,
-              child: AppRow(
-                leading: ContactAvatar(name),
-                title: Text(name, style: AppTheme.of(context).text.titleMedium),
-                subtitle: subtitle.isEmpty ? null : Text(subtitle),
-                trailing: contact['has_conflict'] == true
-                    ? Semantics(
-                        label: '有待处理冲突',
-                        child: Icon(
-                          CupertinoIcons.exclamationmark_triangle,
-                          size: 20,
-                        ),
-                      )
-                    : null,
-                onTap: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute(
-                    builder: (_) => ContactDetail(m, contact['id']),
+        if (m.contacts.isEmpty && !m.loading)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: AppEmptyState(
+              m.search.isEmpty ? '还没有联系人' : '没有找到匹配的联系人',
+              message: m.search.isEmpty ? '轻点右上角 ＋ 添加第一位联系人。' : '试试其他姓名或联系方式。',
+            ),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.builder(
+            itemCount: m.contacts.length,
+            itemBuilder: (context, i) {
+              final contact = m.contacts[i], data = object(contact['data']);
+              final phones = data['phones'] as List,
+                  emails = data['emails'] as List;
+              final name = data['display_name'] as String;
+              final subtitle = phones.isNotEmpty
+                  ? phones.first['value'] as String
+                  : emails.isNotEmpty
+                  ? emails.first['value'] as String
+                  : data['organization'] as String;
+              return AppListItem(
+                first: i == 0,
+                last: i == m.contacts.length - 1,
+                alignment: AppAlignment.avatar,
+                child: AppRow(
+                  leading: ContactAvatar(name),
+                  title: Text(
+                    name,
+                    style: AppTheme.of(context).text.titleMedium,
+                  ),
+                  subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                  trailing: contact['has_conflict'] == true
+                      ? Semantics(
+                          label: '有待处理冲突',
+                          child: Icon(
+                            CupertinoIcons.exclamationmark_triangle,
+                            size: 20,
+                          ),
+                        )
+                      : null,
+                  onTap: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (_) => ContactDetail(m, contact['id']),
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: AppTokens.pagePadding,
-          child: Center(
-            child: m.loading
-                ? const CupertinoActivityIndicator()
-                : m.more
-                ? AppButton(
-                    onPressed: () => m.load(),
-                    child: const Text('加载更多'),
-                  )
-                : const SizedBox.shrink(),
+              );
+            },
           ),
         ),
-      ),
-    ],
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: AppTokens.pagePadding,
+            child: Center(
+              child: m.loading
+                  ? const CupertinoActivityIndicator()
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
   Widget syncPage() => GroupedPageList(
     title: '同步',

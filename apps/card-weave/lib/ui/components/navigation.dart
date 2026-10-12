@@ -71,18 +71,21 @@ class AppNavigation extends StatelessWidget
 class LargeTitlePage extends StatelessWidget {
   final String title;
   final List<Widget> slivers;
+  final ScrollController? controller;
   final Widget? trailing;
   final Widget? leading;
   const LargeTitlePage({
     super.key,
     required this.title,
     required this.slivers,
+    this.controller,
     this.trailing,
     this.leading,
   });
   @override
   Widget build(BuildContext context) => CustomScrollView(
     key: PageStorageKey(title),
+    controller: controller,
     physics: const BouncingScrollPhysics(
       parent: AlwaysScrollableScrollPhysics(),
     ),

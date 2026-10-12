@@ -292,6 +292,7 @@ class AppModel extends ChangeNotifier {
   }
 
   Future<void> load({bool reset = false}) async {
+    if (!reset && loading) return;
     final ticket = ++generation;
     if (reset) {
       contacts = [];
