@@ -13,7 +13,7 @@ fn public_lifecycle_rejects_second_owner_and_preserves_pending() {
     ));
     let mut book = AddressBook::init(&home, None).unwrap();
     assert!(matches!(AddressBook::open(&home), Err(e) if e.code() == "database_in_use"));
-    let data = ContactData::from_json(br#"{"version":1,"display_name":"Fixture"}"#).unwrap();
+    let data = ContactData::from_json(br#"{"version":2,"display_name":"Fixture"}"#).unwrap();
     let contact = book.create(data).unwrap();
     let identity = serde_json::to_value(book.config()).unwrap();
     let pending = book.status().unwrap().pending_outbox;

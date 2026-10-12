@@ -2,20 +2,22 @@
 
 ## 存储与身份
 
-SQLite canonical STRICT 表 `contacts` 具有 `id`、`display_name`、`document` 三个非空 TEXT 字段，首列为主键。document version 为 1。联系人整体是一个 SDK MV register，日期/电话没有单独的同步版本。SDK 管理唯一连接、事务、因果历史、outbox、收件和墓碑；CardWeave 不直接读写内部表。
+SQLite canonical STRICT 表 `contacts` 具有 `id`、`display_name`、`document` 三个非空 TEXT 字段，首列为主键。document version 为 2。联系人整体是一个 SDK MV register，日期/电话没有单独的同步版本。SDK 管理唯一连接、事务、因果历史、outbox、收件和墓碑；CardWeave 不直接读写内部表。
 
 本地目录包含 `contacts.sqlite`、`identity.json` 和 SDK 所需文件。init 只接受不存在的目录，生成 128-bit 随机 dataset/device/incarnation；加入设备时只共享 dataset。open 要求身份文件和数据库都存在且匹配，损坏/缺失时失败，不自动重建。初始化中断可能留下不完整目录，需人工确认后恢复或另建目录。当前无产品级 backup/restore/clone 入口，不手动复制数据库或更改身份来冒充克隆。
 
 ## 联系人输入
 
-`version=1`、`display_name` 必填。`given_name`、`family_name`、`organization`、`notes` 默认空字符串；`phones`、`emails`、`dates` 默认空数组。电话/邮箱项为 `{label,value}`，保持原始文本，不格式化、不校验投递能力、不按电话合并联系人。
+`version=2`、`display_name` 必填。`given_name`、`family_name`、`organization`、`notes` 默认空字符串；`phones`、`emails`、`dates` 默认空数组。电话/邮箱项为 `{label,value}`，保持原始文本，不格式化、不校验投递能力、不按电话合并联系人。
+
+仅支持联系人格式 v2；不兼容或自动迁移旧联系人 v1，旧数据读取明确失败，不自动删除或重建。所有共享通讯录的客户端需使用 v2。身份文件和 SDK schema/protocol 版本不随联系人 document 版本改变。
 
 输入拒绝未知字段，更新完整替换；不支持任意扩展或自动业务 schema 迁移。输出 `Contact` 包含 `id`、`data`、`has_conflict`。
 
 - 每份输入及序列化 document 最多 64 KiB；显示名/姓名/组织最多 1024 UTF-8 字节，备注最多 32768 字节，文本拒绝 NUL。
 - 电话、邮箱、日期各最多 32 项；标签最多 128 字节，电话/邮箱值最多 1024 字节且非空。
-- 日期含 `label/calendar/year/month/day/is_leap_month`。历法为 `gregorian` 或 `chinese_lunar`，year 可空或 1..9999，month 1..12。
-- 公历按月份/闰年校验日数，未知年份允许 2 月 29 日，不允许闰月标记；农历日数只检查 1..30，保留闰月标记，不校验指定年份是否存在该闰月/日期。不进行历法转换、庆祝策略或提醒计算。
+- 日期含 `kind/label/calendar/year/month/day/is_leap_month`。kind 必填且为 `birthday/anniversary/other/custom`，不按 label 推断语义。自定义名称必填，其余类型 label 可空。每个联系人公历生日和农历生日各最多一项，其他类型可重复。历法为 `gregorian` 或 `chinese_lunar`，year 可空；公历支持 1..9999，指定年份的农历支持 1901..2100（以农历新年所在公历年份编号），month 1..12。
+- 公历按月份/闰年校验日数，未知年份允许 2 月 29 日，不允许闰月标记；指定年份的农历由 `chinese-lunisolar-calendar 0.2.5` 校验该年实际月份、闰月和 29/30 天日数，范围外明确拒绝。未知年份的农历保留普通月或闰月 1..12、日 1..30，只校验结构，不按任意年份判定存在性。不进行历法转换、庆祝策略或提醒计算。
 
 ## 查询与冲突
 
@@ -54,3 +56,9 @@ Fs/WebDAV/S3 由 lfs-storage 构造，dataset 命名空间由 SDK 处理。Fs �
 `AddressBook::save_guarded(id, expected, replacement)` 在 SDK 受控写事务中比较完整已观察联系人文档；仅匹配时替换或删除。已删除/基线变化返回 `edit_stale`，不写入业务数据或新增 outbox；多头返回 `conflict_requires_resolution`。既有 CLI update/delete 契约保持不变。该基线是完整文档相等，不是操作版本历史比较。
 
 `card-weave-app-host` 串行拥有一个 AddressBook，FRB 异步调用在 worker 执行，另有独立取消句柄。同步前同步注册 Cancellation，保存/删除/解决先取消同步，再等待现有原子片段结束并检查基线。UI 可浏览缓存和编辑草稿；不另开业务 SQLite 连接。错误通过 `{ok, data/error:{code}}` 结构化响应传递，不包含原始传输错误、密码或密钥。同步配置直接提供会话凭据，不修改进程环境变量。
+
+## 共享日历计算
+
+核心 `calendar_options(calendar, year)` 同时用于联系人校验和应用宿主 `calendar_options` 命令，后者无需打开通讯录。返回 `{min_year,max_year,year_specific,months:[{month,is_leap_month,days}]}`，月份按时间顺序排列。指定农历年份只有真实存在的 12 或 13 个月；未知年份提供普通月与闰月各 12 项，不推断出生年或未来庆祝日期。Flutter 只展示该结果，不维护第二套月长/闰月计算。未知年份补上年份后，若所选闰月或日不存在，必须重新选择，不自动改为普通月。
+
+依赖使用有界历表，限定在其支持的 1901–2100 农历年；代表月份和日数以香港天文台历表验证，并不声称提供范围外的天文计算。此能力不包含公农历互转、系统生日写入或提醒策略。

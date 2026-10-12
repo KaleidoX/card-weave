@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "display_name": "示例联系人",
   "given_name": "联系人",
   "family_name": "示例",
@@ -8,6 +8,6 @@
   "organization": "示例组织",
   "notes": "虚构样本",
   "dates": [
-    {"label": "生日", "calendar": "chinese_lunar", "year": null, "month": 2, "day": 29, "is_leap_month": true}
+    {"kind": "birthday", "label": "生日", "calendar": "chinese_lunar", "year": null, "month": 2, "day": 29, "is_leap_month": true}
   ]
 }

@@ -18,8 +18,18 @@ pub enum Calendar {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DateKind {
+    Birthday,
+    Anniversary,
+    Other,
+    Custom,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ContactDate {
+    pub kind: DateKind,
     pub label: String,
     pub calendar: Calendar,
     pub year: Option<u16>,
@@ -68,7 +78,7 @@ impl ContactData {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.version != 1 {
+        if self.version != 2 {
             return Err(Error::Invalid("unsupported contact version"));
         }
         text(&self.display_name, 1024, true)?;
@@ -88,35 +98,28 @@ impl ContactData {
         if self.dates.len() > 32 {
             return Err(Error::Invalid("at most 32 dates"));
         }
+        let mut birthdays = [false; 2];
         for date in &self.dates {
-            text(&date.label, 128, true)?;
-            if !(1..=12).contains(&date.month)
-                || date.year.is_some_and(|y| !(1..=9999).contains(&y))
-            {
-                return Err(Error::Invalid("date month/year bounds"));
-            }
-            let max_day = match date.calendar {
-                Calendar::ChineseLunar => 30,
-                Calendar::Gregorian => {
-                    if date.is_leap_month {
-                        return Err(Error::Invalid("Gregorian date cannot have leap month"));
-                    }
-                    match date.month {
-                        4 | 6 | 9 | 11 => 30,
-                        2 => {
-                            if date
-                                .year
-                                .is_none_or(|y| y % 4 == 0 && (y % 100 != 0 || y % 400 == 0))
-                            {
-                                29
-                            } else {
-                                28
-                            }
-                        }
-                        _ => 31,
-                    }
+            text(&date.label, 128, date.kind == DateKind::Custom)?;
+            if date.kind == DateKind::Birthday {
+                let index = match date.calendar {
+                    Calendar::Gregorian => 0,
+                    Calendar::ChineseLunar => 1,
+                };
+                if birthdays[index] {
+                    return Err(Error::Invalid("at most one birthday per calendar"));
                 }
-            };
+                birthdays[index] = true;
+            }
+            let options = crate::calendar_options(&date.calendar, date.year)?;
+            let max_day = options
+                .months
+                .iter()
+                .find(|m| m.month == date.month && m.is_leap_month == date.is_leap_month)
+                .ok_or(Error::Invalid(
+                    "month does not exist in selected calendar year",
+                ))?
+                .days;
             if date.day == 0 || date.day > max_day {
                 return Err(Error::Invalid("date day bounds"));
             }

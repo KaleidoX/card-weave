@@ -1,9 +1,13 @@
 pub mod backend;
+mod calendar;
+pub use calendar::{CalendarMonth, CalendarOptions, calendar_options};
 mod model;
 use lfs_protocol::OpId;
 use lfs_sqlite::{Baseline, Column, ColumnType, Identity, Schema, Sdk, Table, Value};
 pub use lfs_sqlite::{Cancellation, SyncLimits, Transport};
-pub use model::{Calendar, Contact, ContactData, ContactDate, LabeledValue, MAX_DOCUMENT_BYTES};
+pub use model::{
+    Calendar, Contact, ContactData, ContactDate, DateKind, LabeledValue, MAX_DOCUMENT_BYTES,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,

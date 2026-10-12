@@ -12,3 +12,4 @@ lfs-storage.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 getrandom.workspace = true
+chinese-lunisolar-calendar = { version = "=0.2.5", default-features = false }

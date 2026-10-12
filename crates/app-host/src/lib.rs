@@ -1,4 +1,6 @@
-use card_weave_core::{AddressBook, Cancellation, ContactData, Error, Resolution};
+use card_weave_core::{
+    AddressBook, Calendar, Cancellation, ContactData, Error, Resolution, calendar_options,
+};
 use lfs_sqlite::NetworkError;
 use lfs_storage::{OpenDalTransport, Options, S3Credentials, WebdavCredentials};
 use serde::Deserialize;
@@ -14,6 +16,10 @@ use std::{
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    CalendarOptions {
+        calendar: Calendar,
+        year: Option<u16>,
+    },
     Identity,
     List {
         search: String,
@@ -162,6 +168,9 @@ impl Host {
                 return Err(Error::Invalid("request too large"));
             }
             let command: Command = serde_json::from_str(&request)?;
+            if let Command::CalendarOptions { ref calendar, year } = command {
+                return encode(calendar_options(calendar, year)?);
+            }
             if matches!(
                 command,
                 Command::Create { .. }
@@ -178,6 +187,7 @@ impl Host {
                 .map_err(|_| Error::Invalid("host unavailable"))?;
             let book = state.as_mut().ok_or(Error::Invalid("not open"))?;
             match command {
+                Command::CalendarOptions { .. } => unreachable!(),
                 Command::Identity => encode(book.config()),
                 Command::List { search, offset } => encode(book.list(&search, 50, offset)?),
                 Command::Get { id } => encode(book.get(&id)?),

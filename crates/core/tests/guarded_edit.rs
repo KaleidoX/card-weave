@@ -12,7 +12,7 @@ fn stale_edit_and_delete_preserve_newer_document_and_outbox() {
             .as_nanos()
     ));
     let mut book = AddressBook::init(&path, None).unwrap();
-    let original = ContactData::from_json(br#"{"version":1,"display_name":"Original","phones":[{"label":"work","value":"123"}],"dates":[{"label":"birthday","calendar":"chinese_lunar","year":null,"month":4,"day":15,"is_leap_month":true}]}"#).unwrap();
+    let original = ContactData::from_json(br#"{"version":2,"display_name":"Original","phones":[{"label":"work","value":"123"}],"dates":[{"kind":"birthday","label":"birthday","calendar":"chinese_lunar","year":null,"month":4,"day":15,"is_leap_month":true}]}"#).unwrap();
     let contact = book.create(original.clone()).unwrap();
     let mut newer = original.clone();
     newer.display_name = "Newer".into();

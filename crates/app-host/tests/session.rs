@@ -23,7 +23,7 @@ fn public_host_serializes_identity_mutations_and_cancel_before_network() {
     );
     let saved = command(
         &host,
-        json!({"action":"create","contact":{"version":1,"display_name":"Host fixture"}}),
+        json!({"action":"create","contact":{"version":2,"display_name":"Host fixture"}}),
     );
     assert_eq!(saved["ok"], true);
     assert_eq!(

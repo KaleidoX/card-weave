@@ -11,3 +11,5 @@
 源码依赖版本、验证和已知边界见[开发指南](DEVELOPMENT.md)。完整分发许可核查属于后续发布工作，不能用此概览宣称完成。
 
 Android 界面使用 Flutter/Dart、flutter_rust_bridge 2.13.0、flutter_secure_storage 11.2.0、path_provider 2.1.6，以及 Android JNI 0.22.4 / rustls-platform-verifier 0.7.1（匹配 Android AAR 0.2.0）。精确依赖图见 apps/card-weave/pubspec.lock 和 apps/card-weave/rust/Cargo.lock；依赖许可继续以各包随附 LICENSE 为准。当前仅提供开发构建，未完成商店分发许可与签名流程。
+
+- [chinese-lunisolar-calendar](https://github.com/magiclen/chinese-lunisolar-calendar) 0.2.5：MIT，Rust 核心农历月份与日数计算。关闭默认 features（不启用时钟/时区功能）；支持农历年 1901–2100。传递依赖包括 chrono、year-helper、chinese-variant、enum-ordinalize，精确版本见两份 Cargo.lock，许可遵循各包随附声明。Flutter 通过现有 JSON 桥接使用核心结果，无独立 Dart 农历库。
