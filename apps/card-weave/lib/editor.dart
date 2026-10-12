@@ -110,6 +110,7 @@ class _ContactEditorState extends State<ContactEditor> {
       ContactDatesEditor(
         dates: data['dates'] as List,
         options: widget.model.calendarOptions,
+        currentDate: widget.model.currentCalendarDate,
         onEditingChanged: (value) => setState(() => editingDate = value),
         onChanged: (value) => setState(() => data['dates'] = value),
       ),

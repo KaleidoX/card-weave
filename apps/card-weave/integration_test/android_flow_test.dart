@@ -64,6 +64,11 @@ void main() {
         await tap('添加日期');
         await tap('公历生日');
         await tap('农历生日');
+        tester
+            .widget<CupertinoPicker>(find.byType(CupertinoPicker).first)
+            .scrollController!
+            .jumpToItem(0);
+        await tester.pumpAndSettle();
         final month = find.byType(CupertinoPicker).at(1);
         tester.widget<CupertinoPicker>(month).scrollController!.jumpToItem(2);
         await tester.pumpAndSettle();

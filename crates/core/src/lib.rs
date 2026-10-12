@@ -1,6 +1,6 @@
 pub mod backend;
 mod calendar;
-pub use calendar::{CalendarMonth, CalendarOptions, calendar_options};
+pub use calendar::{CalendarDate, CalendarMonth, CalendarOptions, calendar_date, calendar_options};
 mod model;
 use lfs_protocol::OpId;
 use lfs_sqlite::{Baseline, Column, ColumnType, Identity, Schema, Sdk, Table, Value};

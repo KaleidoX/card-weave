@@ -81,3 +81,36 @@ pub fn calendar_options(calendar: &Calendar, year: Option<u16>) -> Result<Calend
         months,
     })
 }
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct CalendarDate {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub is_leap_month: bool,
+}
+
+pub fn calendar_date(calendar: &Calendar, year: u16, month: u8, day: u8) -> Result<CalendarDate> {
+    let options = calendar_options(&Calendar::Gregorian, Some(year))?;
+    if month == 0 || month > 12 || day == 0 || day > options.months[usize::from(month - 1)].days {
+        return Err(Error::Invalid("invalid reference date"));
+    }
+    if *calendar == Calendar::Gregorian {
+        return Ok(CalendarDate {
+            year,
+            month,
+            day,
+            is_leap_month: false,
+        });
+    }
+    let solar = chinese_lunisolar_calendar::SolarDate::from_ymd(year, month, day)
+        .map_err(|_| Error::Invalid("invalid reference date"))?;
+    let lunar = chinese_lunisolar_calendar::LunisolarDate::from_solar_date(solar)
+        .map_err(|_| Error::Invalid("reference date outside lunar range"))?;
+    Ok(CalendarDate {
+        year: lunar.to_lunisolar_year().to_u16(),
+        month: lunar.to_lunar_month().to_u8(),
+        day: lunar.to_lunar_day().to_u8(),
+        is_leap_month: lunar.to_lunar_month().is_leap_month(),
+    })
+}

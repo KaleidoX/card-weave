@@ -49,6 +49,12 @@ void main() {
               builder: (context, setState) => ContactDatesEditor(
                 dates: initial,
                 options: options,
+                currentDate: (calendar) async => {
+                  'year': 2025,
+                  'month': 6,
+                  'day': 1,
+                  'is_leap_month': false,
+                },
                 onChanged: (v) {
                   setState(() {
                     initial = v;
@@ -69,30 +75,59 @@ void main() {
     await t.pumpAndSettle();
   }
 
-  testWidgets(
-    'Typed birthdays remain distinct and unfinished additions preserve source',
-    (t) async {
-      List<dynamic>? result;
-      await open(t, [birthday], (v) => result = v);
-      await tap(t, '添加日期');
-      expect(find.text('农历生日'), findsOneWidget);
-      await t.ensureVisible(find.text('选择月份'));
-      await t.drag(find.text('选择月份'), const Offset(0, -88));
-      await t.pumpAndSettle();
-      await t.ensureVisible(find.text('请选择'));
-      await t.drag(find.text('请选择'), const Offset(0, -44));
-      await t.pumpAndSettle();
-      expect(result!.length, 2);
-      expect(result![1]['kind'], 'birthday');
-      expect(result![1]['calendar'], 'chinese_lunar');
-      expect(result![1]['year'], null);
-      expect(result![1]['is_leap_month'], true);
-      await tap(t, '添加日期');
-      expect(find.text('纪念日'), findsOneWidget);
-      expect(result!.length, 2);
-      expect(result![0], birthday);
-    },
-  );
+  testWidgets('Gregorian additions select the current year and complete date', (
+    t,
+  ) async {
+    List<dynamic>? result;
+    await open(t, [], (v) => result = v);
+    await tap(t, '添加日期');
+    expect(result!.single, {
+      'kind': 'birthday',
+      'label': '',
+      'calendar': 'gregorian',
+      'year': 2025,
+      'month': 6,
+      'day': 1,
+      'is_leap_month': false,
+    });
+    final picker = t.widget<CupertinoPicker>(
+      find.byType(CupertinoPicker).first,
+    );
+    expect(picker.scrollController!.selectedItem, 2025);
+    expect(find.text('2025年6月1日'), findsOneWidget);
+  });
+
+  testWidgets('New dates initialize today and birthdays still allow no year', (
+    t,
+  ) async {
+    List<dynamic>? result;
+    await open(t, [birthday], (v) => result = v);
+    await tap(t, '添加日期');
+    expect(find.text('农历生日'), findsOneWidget);
+    expect(result![1]['year'], 2025);
+    expect(result![1]['month'], 6);
+    expect(result![1]['day'], 1);
+    final years = t.widget<CupertinoPicker>(find.byType(CupertinoPicker).first);
+    years.scrollController!.jumpToItem(0);
+    await t.pumpAndSettle();
+    final months = t.widget<CupertinoPicker>(
+      find.byType(CupertinoPicker).at(1),
+    );
+    months.scrollController!.jumpToItem(2);
+    await t.pumpAndSettle();
+    expect(result!.length, 2);
+    expect(result![1]['kind'], 'birthday');
+    expect(result![1]['calendar'], 'chinese_lunar');
+    expect(result![1]['year'], null);
+    expect(result![1]['is_leap_month'], true);
+    await tap(t, '添加日期');
+    expect(find.text('纪念日'), findsOneWidget);
+    expect(result!.length, 3);
+    expect(result![2]['year'], 2025);
+    expect(result![2]['month'], 6);
+    expect(result![2]['day'], 1);
+    expect(result![0], birthday);
+  });
   testWidgets('Changing leap year requires an explicit valid day', (t) async {
     List<dynamic>? result;
     await open(t, [birthday], (v) => result = v);

@@ -16,12 +16,14 @@ class _DateDraft {
 class ContactDatesEditor extends StatefulWidget {
   final List<dynamic> dates;
   final CalendarOptionsProvider options;
+  final Future<Map<String, dynamic>> Function(String) currentDate;
   final ValueChanged<List<dynamic>> onChanged;
   final ValueChanged<bool>? onEditingChanged;
   const ContactDatesEditor({
     super.key,
     required this.dates,
     required this.options,
+    required this.currentDate,
     required this.onChanged,
     this.onEditingChanged,
   });
@@ -39,6 +41,8 @@ class _ContactDatesEditorState extends State<ContactDatesEditor> {
       ),
   ];
   _DateDraft? active;
+  bool adding = false;
+  String? addError;
   static const types = {
     'gregorian': '公历生日',
     'chinese_lunar': '农历生日',
@@ -55,7 +59,7 @@ class _ContactDatesEditorState extends State<ContactDatesEditor> {
         e.value['calendar'] == key,
   );
   void publish() {
-    widget.onEditingChanged?.call(entries.any((e) => !e.valid));
+    widget.onEditingChanged?.call(adding || entries.any((e) => !e.valid));
     widget.onChanged([
       for (final e in entries)
         if (e.saved != null) Map<String, dynamic>.from(e.saved!),
@@ -69,25 +73,39 @@ class _ContactDatesEditorState extends State<ContactDatesEditor> {
     });
   }
 
-  void add() {
+  Future<void> add() async {
+    if (adding) return;
     FocusScope.of(context).unfocus();
     final calendar = occupied('gregorian') && !occupied('chinese_lunar')
         ? 'chinese_lunar'
         : 'gregorian';
     final birthday = !occupied(calendar);
     setState(() {
-      active = _DateDraft({
-        'kind': birthday ? 'birthday' : 'anniversary',
-        'label': '',
-        'calendar': calendar,
-        'year': birthday ? null : DateTime.now().year,
-        'month': null,
-        'day': null,
-        'is_leap_month': false,
-      });
-      entries.add(active!);
+      adding = true;
+      addError = null;
     });
-    publish();
+    widget.onEditingChanged?.call(true);
+    try {
+      final today = await widget.currentDate(calendar);
+      if (!mounted) return;
+      setState(() {
+        final value = <String, dynamic>{
+          'kind': birthday ? 'birthday' : 'anniversary',
+          'label': '',
+          'calendar': calendar,
+          ...today,
+        };
+        active = _DateDraft(value, saved: Map.of(value), valid: true);
+        entries.add(active!);
+      });
+    } catch (_) {
+      if (mounted) setState(() => addError = '无法获取当前日期，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() => adding = false);
+        publish();
+      }
+    }
   }
 
   Future<void> changeType(_DateDraft e, String v) async {
@@ -120,6 +138,7 @@ class _ContactDatesEditorState extends State<ContactDatesEditor> {
   @override
   Widget build(BuildContext context) => FormField<bool>(
     validator: (_) {
+      if (adding) return '正在获取当前日期';
       final invalid = entries.where((e) => !e.valid).firstOrNull;
       if (invalid != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -141,7 +160,7 @@ class _ContactDatesEditorState extends State<ContactDatesEditor> {
               AppFieldRow(
                 icon: entries.isEmpty ? CupertinoIcons.calendar : null,
                 child: AppButton(
-                  onPressed: add,
+                  onPressed: adding ? null : add,
                   child: const Align(
                     alignment: Alignment.centerLeft,
                     child: Text('添加日期'),
@@ -150,6 +169,9 @@ class _ContactDatesEditorState extends State<ContactDatesEditor> {
               ),
           ],
         ),
+        if (adding) const AppStatus('正在获取当前日期'),
+        if (addError != null)
+          AppStatus(addError!, kind: AppStatusKind.error, onRetry: add),
         if (field.hasError)
           AppStatus(field.errorText!, kind: AppStatusKind.error),
       ],

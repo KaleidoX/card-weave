@@ -68,10 +68,30 @@ void main() {
       }
 
       await tap('添加日期');
+      expect(
+        find.text(
+          dateText({
+            'calendar': 'gregorian',
+            ...await model.currentCalendarDate('gregorian'),
+          }),
+        ),
+        findsOneWidget,
+      );
+      await pick(0, 0);
       await pick(1, 2);
       await pick(2, 29);
       await tap('添加日期');
       expect(find.text('农历生日'), findsOneWidget);
+      expect(
+        find.text(
+          dateText({
+            'calendar': 'chinese_lunar',
+            ...await model.currentCalendarDate('chinese_lunar'),
+          }),
+        ),
+        findsOneWidget,
+      );
+      await pick(0, 0);
       await pick(1, 2);
       await pick(2, 1);
       await tap('完成');

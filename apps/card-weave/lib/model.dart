@@ -229,6 +229,18 @@ class AppModel extends ChangeNotifier {
     await command('calendar_options', {'calendar': calendar, 'year': year}),
   );
 
+  Future<Map<String, dynamic>> currentCalendarDate(String calendar) async {
+    final now = DateTime.now();
+    return object(
+      await command('calendar_date', {
+        'calendar': calendar,
+        'year': now.year,
+        'month': now.month,
+        'day': now.day,
+      }),
+    );
+  }
+
   Future<void> save(
     Map<String, dynamic> data, {
     Map<String, dynamic>? original,
