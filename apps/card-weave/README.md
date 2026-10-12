@@ -24,7 +24,7 @@ Flutter 跨平台界面，通过 flutter_rust_bridge 调用 Rust 应用宿主与
 
 ## 构建
 
-当前锁定 Flutter 3.47.7 / Dart 3.13.5、flutter_rust_bridge 2.13.0、Rust 1.96.0、NDK 28.2.13676358；Android SDK Platform 36、Build Tools 36.0.0，JNI 插件另需 Platform 35。需要完整 submodule；当前固定的 LocalWeave 提交 `bffb081c6e9a80ad1e14583aab4db23850b814ce` 已包含 Android 文件锁及错误分类修复。
+当前锁定 Flutter 3.47.7 / Dart 3.13.5、flutter_rust_bridge 2.13.0、Rust 1.96.0、NDK 28.2.13676358；Android SDK Platform 36、Build Tools 36.0.0，JNI 插件另需 Platform 35。需要完整 submodule；LocalWeave 版本以仓库固定的 submodule 引用为准，包含 Android 文件锁、错误分类和 WebDAV 空目录初始化修复。
 
 在仓库根目录准备 `ANDROID_HOME`、可选 `ANDROID_NDK_HOME`，将 Flutter 和 Rust 加入 PATH，并安装 Rust Android target。Linux 上需提供 libclang；系统默认找不到时设置 `LIBCLANG_PATH` 和 `CARDWEAVE_BINDGEN_EXTRA_ARGS`。不要把开发机路径写入仓库。
 
@@ -36,7 +36,16 @@ cd ../..
 bash apps/card-weave/tool/build_android.sh
 ```
 
-默认生成 x86_64 debug APK：`apps/card-weave/build/app/outputs/flutter-apk/app-debug.apk`。`CARDWEAVE_ABI=arm64-v8a` 选择 ARM64 构建路径，但 ARM 真机资格尚未验证。脚本默认 Linux NDK host；其他宿主自行提供 `ANDROID_NDK_HOST_TAG` 并单独验证。不提供 release 签名或商店发布流程。
+默认生成 x86_64 debug APK：`apps/card-weave/build/app/outputs/flutter-apk/app-debug.apk`。`CARDWEAVE_ABI=arm64-v8a` 选择 ARM64 真机；每个 APK 只包含指定架构，其他架构的历史构建文件不会混入。脚本默认 Linux NDK host；其他宿主自行提供 `ANDROID_NDK_HOST_TAG` 并单独验证。
+
+日常调试保留 debug；测量体积或分发试用时同时使用 Rust 与 Flutter 的 release 构建：
+
+```sh
+rustup target add aarch64-linux-android
+CARDWEAVE_ABI=arm64-v8a CARDWEAVE_BUILD_MODE=release bash apps/card-weave/tool/build_android.sh
+```
+
+产物为 `apps/card-weave/build/app/outputs/flutter-apk/app-release.apk`。模式仅支持 `debug` / `release`，不要额外传入 Flutter 模式或架构参数，以免 Rust 与 Flutter 构建不一致。release 使用 AOT 和 Flutter 默认资源裁剪；不裁剪通讯录或同步功能。当前 release 仍使用开发签名，尚未提供生产签名和商店发布流程。debug APK 含开发引擎、运行快照及调试依赖，不适合作为发布体积基准。
 
 TLS AAR 版本从 Rust Cargo.lock 中的 `rustls-platform-verifier-android` 读取，默认使用项目官方 maven-archive。网络不可用时可用 `CARDWEAVE_RUSTLS_MAVEN` 指向来自同一官方版本的本地 Maven 缓存。Android Activity 在网络前初始化 Application Context，不修改平台信任规则。
 

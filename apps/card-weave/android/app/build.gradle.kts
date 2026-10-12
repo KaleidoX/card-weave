@@ -20,6 +20,12 @@ android {
         applicationId = if (System.getenv("CARDWEAVE_ACCEPTANCE") == "1") "io.cardweave.app.acceptance" else "io.cardweave.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
+        val targetAbi = System.getenv("CARDWEAVE_ABI") ?: "x86_64"
+        require(targetAbi in setOf("x86_64", "arm64-v8a")) { "Unsupported CARDWEAVE_ABI" }
+        ndk {
+            abiFilters.clear()
+            abiFilters.add(targetAbi)
+        }
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
