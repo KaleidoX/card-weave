@@ -71,11 +71,13 @@ class LargeTitlePage extends StatelessWidget {
   final String title;
   final List<Widget> slivers;
   final Widget? trailing;
+  final Widget? leading;
   const LargeTitlePage({
     super.key,
     required this.title,
     required this.slivers,
     this.trailing,
+    this.leading,
   });
   @override
   Widget build(BuildContext context) => CustomScrollView(
@@ -87,6 +89,7 @@ class LargeTitlePage extends StatelessWidget {
       CupertinoSliverNavigationBar(
         largeTitle: Text(title),
         trailing: trailing,
+        leading: leading,
         automaticallyImplyLeading: false,
         backgroundColor: AppTheme.of(context).colors.background,
         border: null,
