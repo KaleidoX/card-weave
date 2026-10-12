@@ -48,3 +48,9 @@ Fs/WebDAV/S3 由 lfs-storage 构造，dataset 命名空间由 SDK 处理。Fs �
 | 5 | sync 返回报告，但仍未 settled |
 
 配置错误、未知字段、数据上限和非法日期在写入前拒绝。网络失败保留本地数据和未确认 outbox，后续可重试；不自动清理远端对象。
+
+## 图形宿主的编辑基线
+
+`AddressBook::save_guarded(id, expected, replacement)` 在 SDK 受控写事务中比较完整已观察联系人文档；仅匹配时替换或删除。已删除/基线变化返回 `edit_stale`，不写入业务数据或新增 outbox；多头返回 `conflict_requires_resolution`。既有 CLI update/delete 契约保持不变。该基线是完整文档相等，不是操作版本历史比较。
+
+`card-weave-app-host` 串行拥有一个 AddressBook，FRB 异步调用在 worker 执行，另有独立取消句柄。同步前同步注册 Cancellation，保存/删除/解决先取消同步，再等待现有原子片段结束并检查基线。UI 可浏览缓存和编辑草稿；不另开业务 SQLite 连接。错误通过 `{ok, data/error:{code}}` 结构化响应传递，不包含原始传输错误、密码或密钥。同步配置直接提供会话凭据，不修改进程环境变量。

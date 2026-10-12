@@ -8,7 +8,9 @@
 | 故障恢复 | 真实缺失 Fs 路径、错误 HTTP 认证后 pending 保留，恢复后收敛；未验证断电/杀进程恢复 |
 | Rust API / CLI | 源码与本地 Linux 构建；未发布 crate/预编译包 |
 | WebDAV Bearer / S3 session token | 配置和 SDK 接入已实现，尚未验证相应认证方式 |
-| Android / iOS / macOS / Windows | 未验证，尚无图形界面/系统通讯录集成 |
+| Android Flutter UI | 联系人列表、搜索、完整字段编辑、删除；手动 HTTPS WebDAV 同步、旧草稿保护和显式冲突处理；Android 9/API 28 x86_64 原生验证，详见[应用说明](../apps/card-weave/README.md) |
+| iOS / macOS / Windows | 产品界面尚未验证；iOS 按用户决定后置 |
+| Android S3 / ARM 真机 | 接入/构建路径已提供，原生行为未验证 |
 | 其他 OpenDAL 后端 | 未开放；不能从 OpenDAL 支持列表推断产品兼容性 |
 
 当前版本不包含提醒、头像附件、导入导出、去重合并、系统通讯录桥接、端到端加密、多人权限或远端自动 GC。联系人/历史/墓碑会持续增长，无大数据性能保证。SQLite 业务 schema 无自动迁移。

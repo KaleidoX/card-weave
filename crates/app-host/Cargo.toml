@@ -1,0 +1,12 @@
+[package]
+name = "card-weave-app-host"
+version.workspace = true
+edition.workspace = true
+publish = false
+[dependencies]
+card-weave-core.workspace = true
+lfs-sqlite.workspace = true
+lfs-storage.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

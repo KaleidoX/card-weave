@@ -16,6 +16,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     Invalid(&'static str),
     NotFound,
+    EditStale,
     Conflict,
     Io(std::io::Error),
     Json(serde_json::Error),
@@ -26,6 +27,7 @@ impl Error {
         match self {
             Self::Invalid(_) | Self::Json(_) => "invalid_input",
             Self::NotFound => "not_found",
+            Self::EditStale => "edit_stale",
             Self::Conflict => "conflict_requires_resolution",
             Self::Io(_) => "io_error",
             Self::Sdk(e) => match e {
@@ -382,6 +384,50 @@ impl AddressBook {
         })?;
         Ok(())
     }
+    /// Atomically compares the observed full document before replacing or deleting it.
+    pub fn save_guarded(
+        &mut self,
+        id: &str,
+        expected: &ContactData,
+        replacement: Option<ContactData>,
+    ) -> Result<Option<Contact>> {
+        self.writable(id).map_err(|error| match error {
+            Error::NotFound => Error::EditStale,
+            other => other,
+        })?;
+        expected.validate()?;
+        let expected = serde_json::to_string(expected)?;
+        let values = replacement.as_ref().map(|data| row(id, data)).transpose()?;
+        let (changed, _) = self.sdk.write_transaction(|w| {
+            let current = w.query(
+                "SELECT document FROM contacts WHERE id=?1",
+                &[Value::Text(id.into())],
+            )?;
+            if current.first().and_then(|r| r.first()) != Some(&Value::Text(expected.clone())) {
+                return Ok(false);
+            }
+            match &values {
+                Some(values) => {
+                    w.execute(
+                        "UPDATE contacts SET display_name=?2,document=?3 WHERE id=?1",
+                        values,
+                    )?;
+                }
+                None => {
+                    w.execute(
+                        "DELETE FROM contacts WHERE id=?1",
+                        &[Value::Text(id.into())],
+                    )?;
+                }
+            }
+            Ok(true)
+        })?;
+        if !changed {
+            return Err(Error::EditStale);
+        }
+        self.get(id)
+    }
+
     pub fn conflicts(&mut self) -> Result<Vec<ContactConflict>> {
         self.sdk
             .list_conflicts()?

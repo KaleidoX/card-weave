@@ -9,3 +9,5 @@
 - rclone：仅作为显式传入的测试工具，不嵌入产品；验收工具版本为 1.75.1。
 
 源码依赖版本、验证和已知边界见[开发指南](DEVELOPMENT.md)。完整分发许可核查属于后续发布工作，不能用此概览宣称完成。
+
+Android 界面使用 Flutter/Dart、flutter_rust_bridge 2.13.0、flutter_secure_storage 11.2.0、path_provider 2.1.6，以及 Android JNI 0.22.4 / rustls-platform-verifier 0.7.1（匹配 Android AAR 0.2.0）。精确依赖图见 apps/card-weave/pubspec.lock 和 apps/card-weave/rust/Cargo.lock；依赖许可继续以各包随附 LICENSE 为准。当前仅提供开发构建，未完成商店分发许可与签名流程。

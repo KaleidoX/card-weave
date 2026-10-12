@@ -2,7 +2,7 @@
 
 跨平台通讯录工具：通过 LocalWeave 将联系人保存在本地 SQLite，借助 OpenDAL 后端同步，并保留联系人日期的农历、闰月和未知年份语义。
 
-当前交付为 **Rust 通讯录核心 + JSON CLI**，已在 Linux 验证离线管理、三设备同步和显式冲突解决。尚无图形界面或可用的 iOS / Android 产品；其他平台与真实云服务仍待分别验证。
+当前源码包含 **Rust 通讯录核心、JSON CLI 与 Android Flutter 界面**。Android 支持联系人管理、手动同步和显式冲突处理；构建、使用与验证边界见 [Android 应用](apps/card-weave/README.md)。iOS 验证后置，其他平台与真实云服务仍待分别验证。
 
 ## 构建
 
@@ -54,7 +54,7 @@ Fs 后端配置为 `{"type":"fs","root":"/absolute/existing/shared-directory"}`�
 
 ## Rust API 与文档
 
-- [核心 API](crates/core/src/lib.rs)：`AddressBook::init/open/create/get/list/update/delete/conflicts/resolve/status/sync/close`。一个实例拥有一个 SDK；方法使用可变借用串行操作，宿主自行提供 async runtime。
+- [核心 API](crates/core/src/lib.rs)：`AddressBook::init/open/create/get/list/update/delete/save_guarded/conflicts/resolve/status/sync/close`。一个实例拥有一个 SDK；方法使用可变借用串行操作，宿主自行提供 async runtime。
 - [数据与 CLI 契约](docs/CORE.md)：字段、限制、身份、错误和同步语义。
 - [开发与验收](docs/DEVELOPMENT.md)：命令、工具链与测试入口。
 - [能力与限制](docs/CAPABILITIES.md)：已验证范围及尚未实现的边界。

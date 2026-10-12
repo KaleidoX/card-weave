@@ -2,7 +2,7 @@
 
 ## 源码依赖
 
-LocalWeave 通过 `vendor/local-weave` Git 子模块接入，远端为 `https://github.com/KaleidoX/local-weave`，gitlink 固定 SDK 基线 commit `b0c457eeb3efc3b60aeab032bb78fe6cfd6a352b`。Cargo 仅引用子模块内部路径，不依赖仓库外的 SDK checkout。子模块保持自身 workspace，排除于 CardWeave workspace 成员之外。Cargo.lock 固定第三方依赖。
+LocalWeave 通过 `vendor/local-weave` Git 子模块接入，远端为 `https://github.com/KaleidoX/local-weave`，gitlink 固定 SDK 基线 commit `bffb081c6e9a80ad1e14583aab4db23850b814ce`。Cargo 仅引用子模块内部路径，不依赖仓库外的 SDK checkout。子模块保持自身 workspace，排除于 CardWeave workspace 成员之外。Cargo.lock 固定第三方依赖。
 
 首次获取仓库可使用 `git clone --recurse-submodules <CardWeave 仓库地址>`；已有 checkout 执行：
 
@@ -40,3 +40,7 @@ python3 scripts/acceptance.py --backend s3 --rclone /absolute/path/to/rclone
 `cargo test` 的公开 API 集成测试验证重复占用、关闭/重开、身份与 pending 保留。CLI 脚本从公开入口验收 CRUD、搜索、分页、输入拒绝、日期往返、三设备并发、旧 observed heads 解决、删除冲突、失败恢复和身份错误。每次创建独立临时目录，HTTP 测试启动仅绑定 loopback 的自有进程，以合成认证配置运行，finally 中停止该进程并移除 fixture。无真实联系人/账户/云盘访问。
 
 HTTP 验收使用 rclone 1.75.1，要求支持 `serve webdav` 和 `serve s3`。测试必须显式指定 rclone；不自动安装或连接已有服务。本地参考服务验证不能代替真实云供应商的兼容性测试。已验证范围见[能力与限制](CAPABILITIES.md)。
+
+## Android 应用
+
+Flutter 工程、平台构建及真实 UI 集成测试入口见 [Android 应用说明](../apps/card-weave/README.md)。根 Cargo workspace 的检查覆盖应用宿主；FRB native crate 位于独立的 `apps/card-weave/rust` workspace，需另行编译检查。固定的 SDK 引用已包含 Android 文件锁及错误分类修复；按上文初始化 submodule 即可取得对应源码。iOS 按当前用户决定后置。

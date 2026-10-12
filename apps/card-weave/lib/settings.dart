@@ -1,0 +1,192 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'model.dart';
+import 'main.dart' show notice;
+
+class SettingsPage extends StatefulWidget {
+  final AppModel model;
+  const SettingsPage(this.model, {super.key});
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final form = GlobalKey<FormState>();
+  late String type = widget.model.config['type'] as String? ?? 'webdav';
+  late final endpoint = TextEditingController(
+    text: widget.model.config['endpoint'] as String? ?? '',
+  );
+  late final region = TextEditingController(
+    text: widget.model.config['region'] as String? ?? '',
+  );
+  late final bucket = TextEditingController(
+    text: widget.model.config['bucket'] as String? ?? '',
+  );
+  late final username = TextEditingController(
+    text: widget.model.credentials['username'] as String? ?? '',
+  );
+  late final password = TextEditingController(
+    text: widget.model.credentials['password'] as String? ?? '',
+  );
+  late final access = TextEditingController(
+    text: widget.model.credentials['access_key'] as String? ?? '',
+  );
+  late final secret = TextEditingController(
+    text: widget.model.credentials['secret_key'] as String? ?? '',
+  );
+  late final token = TextEditingController(
+    text: widget.model.credentials['session_token'] as String? ?? '',
+  );
+  late bool remember = widget.model.config['credential_ref'] != null;
+  bool saving = false;
+  String? error;
+  @override
+  void dispose() {
+    for (final c in [
+      endpoint,
+      region,
+      bucket,
+      username,
+      password,
+      access,
+      secret,
+      token,
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget input(
+    TextEditingController controller,
+    String label, {
+    bool hidden = false,
+    bool required = true,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: TextFormField(
+      controller: controller,
+      obscureText: hidden,
+      enableSuggestions: !hidden,
+      autocorrect: false,
+      decoration: InputDecoration(labelText: label),
+      validator: (v) =>
+          required && (v ?? '').trim().isEmpty ? '请填写$label' : null,
+    ),
+  );
+  Future<void> save() async {
+    if (!form.currentState!.validate()) return;
+    final backend = {
+      'type': type,
+      'endpoint': endpoint.text.trim(),
+      if (type == 's3') 'region': region.text.trim(),
+      if (type == 's3') 'bucket': bucket.text.trim(),
+    };
+    final credentials = type == 'webdav'
+        ? <String, dynamic>{
+            'username': username.text,
+            'password': password.text,
+          }
+        : <String, dynamic>{
+            'access_key': access.text,
+            'secret_key': secret.text,
+            'session_token': token.text.isEmpty ? null : token.text,
+          };
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      await widget.model.saveConfig(backend, credentials, remember);
+      if (mounted) notice(context, '配置已保存；尚未连接服务器。可前往同步页面开始同步。');
+    } catch (e) {
+      if (mounted) setState(() => error = message(e));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Form(
+    key: form,
+    child: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('同步位置', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        const Text('使用你自己的 HTTPS WebDAV 或 S3 兼容存储。所有设备需使用同一通讯录加入信息与同步位置。'),
+        const SizedBox(height: 24),
+        DropdownButtonFormField<String>(
+          initialValue: type,
+          decoration: const InputDecoration(labelText: '存储类型'),
+          items: const [
+            DropdownMenuItem(value: 'webdav', child: Text('WebDAV')),
+            DropdownMenuItem(value: 's3', child: Text('S3 兼容存储')),
+          ],
+          onChanged: (v) => setState(() => type = v!),
+        ),
+        const SizedBox(height: 16),
+        input(endpoint, 'HTTPS 服务地址'),
+        if (type == 's3') ...[
+          input(region, '区域'),
+          input(bucket, '存储桶'),
+          input(access, 'Access Key'),
+          input(secret, 'Secret Key', hidden: true),
+          input(token, 'Session Token（可选）', hidden: true, required: false),
+        ] else ...[
+          input(username, '用户名'),
+          input(password, '密码', hidden: true),
+        ],
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('记住凭据'),
+          subtitle: Text(
+            remember ? '使用设备安全存储，凭据不会随联系人同步。' : '仅本次使用；重启应用后需重新输入。',
+          ),
+          value: remember,
+          onChanged: (v) => setState(() => remember = v),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        FilledButton(
+          onPressed: saving || widget.model.syncing ? null : save,
+          child: Text(saving ? '正在保存…' : '保存同步配置'),
+        ),
+        const SizedBox(height: 32),
+        Text('连接另一台设备', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        const Text('在新设备首次启动时粘贴加入信息，然后单独填写访问凭据。加入信息不包含密码，也不授予存储访问权限。'),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () async {
+            await Clipboard.setData(
+              ClipboardData(text: widget.model.joinText()),
+            );
+            if (context.mounted) notice(context, '加入信息已复制，不包含凭据');
+          },
+          icon: const Icon(Icons.copy_outlined),
+          label: const Text('复制加入信息'),
+        ),
+        ExpansionTile(
+          title: const Text('设备与通讯录信息'),
+          children: [
+            SelectableText(
+              '通讯录：${widget.model.identity['dataset']}\n设备：${widget.model.identity['device']}',
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+        const SizedBox(height: 24),
+        const Text('CardWeave 0.1.0 · Android 开发版\n外观与字号跟随系统。'),
+        const SizedBox(height: 24),
+      ],
+    ),
+  );
+}

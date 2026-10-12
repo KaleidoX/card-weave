@@ -1,0 +1,21 @@
+name: card_weave
+description: Local-first contacts with explicit sync and conflict resolution.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.13.5
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_rust_bridge: 2.13.0
+  flutter_secure_storage: 11.2.0
+  path_provider: 2.1.6
+  collection: 1.19.1
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+flutter:
+  uses-material-design: true
