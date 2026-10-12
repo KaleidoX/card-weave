@@ -37,7 +37,7 @@ resolve 必须提供 `observed`（1..1000 个 version ID）和显式 `contact`�
 
 调用 Sdk::sync_once，使用 SDK 默认上传/下载/分页/重试预算；网络不在 SQL 事务内。当前 AddressBook API 用可变借用串行化操作，不在一次 sync 调用期间并行编辑同一实例；支持传入 Cancellation。
 
-Fs/WebDAV/S3 由 lfs-storage 构造，dataset 命名空间由 SDK 处理。Fs 目录须已存在、绝对路径且符合 SDK 的非符号链接要求。WebDAV 支持 Basic 或 Bearer（二选一）；目前仅 Basic 通过参考服务验证。HTTPS 为默认；`allow_loopback_http=true` 仅用于显式 127.0.0.1/[::1] 本地测试。S3 必填 endpoint/region/bucket，不自动发现宿主凭据；session_token_env 可选。
+Fs/WebDAV/S3 由 lfs-storage 构造，dataset 命名空间由 SDK 处理。Fs 目录须已存在、绝对路径且符合 SDK 的非符号链接要求。WebDAV 的 `endpoint` 表示服务入口，可选 `directory` 表示入口下的相对同步目录，缺失时为空以保留原位置。目录拒绝点段、空内部段、反斜线及 NUL，最多 1024 UTF-8 字节；首次扫描和上传前逐层建立目录，创建失败仍终止同步，不把 HTTP 409 泛化为空扫描。WebDAV 支持 Basic 或 Bearer（二选一）；目前仅 Basic 通过参考服务验证。HTTPS 为默认；`allow_loopback_http=true` 仅用于显式 127.0.0.1/[::1] 本地测试。S3 必填 endpoint/region/bucket，不自动发现宿主凭据；session_token_env 可选。
 
 状态暴露 pending_outbox、conflict_count、stopped_streams、discovery_incomplete、outstanding_objects、inbox_states、last_sync_failed。`protocol_healthy` 是 SDK 健康判定，`settled` 还要求无 pending 和冲突；sync 的 settled 额外要求本次完整扫描。last_sync_failed 是当前实例内的最近错误标记，不是跨 CLI 进程持久日志；持久失败以 inbox/停止流/欠账为准。
 

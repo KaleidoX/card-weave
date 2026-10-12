@@ -18,6 +18,9 @@ class _SettingsPageState extends State<SettingsPage> {
   late final endpoint = TextEditingController(
     text: widget.model.config['endpoint'] as String? ?? '',
   );
+  late final directory = TextEditingController(
+    text: widget.model.config['directory'] as String? ?? 'CardWeave',
+  );
   late final region = TextEditingController(
     text: widget.model.config['region'] as String? ?? '',
   );
@@ -46,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     for (final c in [
       endpoint,
+      directory,
       region,
       bucket,
       username,
@@ -76,6 +80,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final backend = {
       'type': type,
       'endpoint': endpoint.text.trim(),
+      if (type == 'webdav') 'directory': directory.text.trim(),
       if (type == 's3') 'region': region.text.trim(),
       if (type == 's3') 'bucket': bucket.text.trim(),
     };
@@ -143,7 +148,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   onChanged: (v) => setState(() => type = v),
                 ),
               ),
-              input(endpoint, '服务地址'),
+              input(endpoint, type == 'webdav' ? 'WebDAV 服务地址' : '服务地址'),
+              if (type == 'webdav') input(directory, '同步目录', required: false),
               if (type == 's3') ...[
                 input(region, '区域'),
                 input(bucket, '存储桶'),
@@ -161,6 +167,13 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ],
           ),
+          if (type == 'webdav')
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                '坚果云服务地址：https://dav.jianguoyun.com/dav/\n同步目录如 CardWeave，支持多级目录，首次同步自动创建；留空使用服务根目录。',
+              ),
+            ),
           const SizedBox(height: 16),
           AppGroup(
             children: [

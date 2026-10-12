@@ -59,11 +59,29 @@ Map<String, dynamic> emptyContact() => {
   'emails': <dynamic>[],
   'dates': <dynamic>[],
 };
-const publicBackendKeys = ['type', 'endpoint', 'region', 'bucket'];
-Map<String, dynamic> publicBackend(Map<String, dynamic> value) => {
-  for (final k in publicBackendKeys)
-    if (value.containsKey(k)) k: value[k],
-};
+const publicBackendKeys = ['type', 'endpoint', 'directory', 'region', 'bucket'];
+Map<String, dynamic> publicBackend(Map<String, dynamic> value) {
+  final result = <String, dynamic>{
+    for (final k in publicBackendKeys)
+      if (value.containsKey(k)) k: value[k],
+  };
+  if (result['type'] == 'webdav' && !result.containsKey('directory')) {
+    final uri = Uri.tryParse(result['endpoint'] as String? ?? '');
+    if (uri?.host == 'dav.jianguoyun.com' &&
+        uri!.pathSegments.firstOrNull == 'dav') {
+      result['endpoint'] = uri.replace(path: '/dav/').toString();
+      result['directory'] = uri.pathSegments
+          .skip(1)
+          .where((s) => s.isNotEmpty)
+          .join('/');
+    } else {
+      result['directory'] = '';
+    }
+  }
+  if (result['type'] != 'webdav') result.remove('directory');
+  return result;
+}
+
 void validateBackend(Map<String, dynamic> value) {
   final uri = Uri.tryParse(value['endpoint'] as String? ?? '');
   if (!['webdav', 's3'].contains(value['type']) ||
@@ -74,6 +92,21 @@ void validateBackend(Map<String, dynamic> value) {
       uri.hasQuery ||
       uri.hasFragment) {
     throw AppFailure('invalid_input');
+  }
+  if (value['type'] == 'webdav') {
+    final directory = (value['directory'] as String? ?? '').replaceAll(
+      RegExp(r'^/+|/+$'),
+      '',
+    );
+    if (utf8.encode(directory).length > 1024 ||
+        directory.contains('\\') ||
+        directory.contains('\u0000') ||
+        (directory.isNotEmpty &&
+            directory
+                .split('/')
+                .any((part) => part.isEmpty || part == '.' || part == '..'))) {
+      throw AppFailure('invalid_input');
+    }
   }
   if (value['type'] == 's3' &&
       ((value['region'] as String? ?? '').isEmpty ||
@@ -137,7 +170,8 @@ class AppModel extends ChangeNotifier {
       }
       final file = File('${directory.path}/sync.json');
       if (await file.exists()) {
-        config = object(jsonDecode(await file.readAsString()));
+        final saved = object(jsonDecode(await file.readAsString()));
+        config = {...saved, ...publicBackend(saved)};
       }
       final ref = config['credential_ref'];
       if (ref is String) {

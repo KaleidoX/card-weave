@@ -93,3 +93,5 @@ CARDWEAVE_ACCEPTANCE=1 flutter test integration_test/expanded_fields_test.dart -
 既有通讯录需从设置主动升级后使用群组；原库保留，新加入信息需要在其他升级后的设备重新加入。请先汇集所有设备修改并处理冲突，不直接替换数据库文件。数据和 CLI 约定见 [群组与升级](../../docs/GROUPS.md)。
 
 第二阶段 Android 验收：`CARDWEAVE_ACCEPTANCE=1 flutter test integration_test/groups_test.dart --no-pub -d DEVICE`，先以相同环境变量执行构建脚本。测试实例与普通应用隔离，不能使用普通 applicationId 运行会卸载实例的集成测试。
+
+WebDAV 设置将服务地址与同步目录分开填写。坚果云服务地址为 `https://dav.jianguoyun.com/dav/`，同步目录例如 `CardWeave`；留空使用服务根目录。首次同步逐层创建目录，不要求预先建立。既有坚果云地址在读取时按 `/dav/` 拆分，保持远端路径不变；其他服务旧地址原样保留，不猜测服务根路径。加入信息包含目录，所有设备需使用支持此字段的版本。

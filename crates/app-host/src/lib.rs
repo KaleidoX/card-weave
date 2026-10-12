@@ -69,6 +69,8 @@ pub enum Command {
 pub enum SyncConfig {
     Webdav {
         endpoint: String,
+        #[serde(default)]
+        directory: String,
         username: String,
         password: String,
     },
@@ -87,10 +89,12 @@ impl SyncConfig {
         let result = match self {
             Self::Webdav {
                 endpoint,
+                directory,
                 username,
                 password,
-            } => OpenDalTransport::webdav(
+            } => OpenDalTransport::webdav_with_directory(
                 &endpoint,
+                &directory,
                 WebdavCredentials::Basic { username, password },
                 options,
             ),

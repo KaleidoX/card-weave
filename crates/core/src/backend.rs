@@ -12,6 +12,8 @@ pub enum Backend {
     },
     Webdav {
         endpoint: String,
+        #[serde(default)]
+        directory: String,
         username_env: Option<String>,
         password_env: Option<String>,
         bearer_env: Option<String>,
@@ -55,6 +57,7 @@ impl Backend {
             Self::Fs { root } => OpenDalTransport::fs(root, Options::default()),
             Self::Webdav {
                 endpoint,
+                directory,
                 username_env,
                 password_env,
                 bearer_env,
@@ -72,7 +75,12 @@ impl Backend {
                         ));
                     }
                 };
-                OpenDalTransport::webdav(endpoint, credentials, options(*allow_loopback_http))
+                OpenDalTransport::webdav_with_directory(
+                    endpoint,
+                    directory,
+                    credentials,
+                    options(*allow_loopback_http),
+                )
             }
             Self::S3 {
                 endpoint,
