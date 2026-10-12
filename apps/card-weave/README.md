@@ -16,6 +16,10 @@ Flutter 跨平台界面，通过 flutter_rust_bridge 调用 Rust 应用宿主与
 
 导航、按钮、开关、类型菜单、确认对话框和日期控件统一使用 Cupertino。同步页将手动操作、待上传内容和冲突分开呈现；冲突候选逐项显示差异，可展开完整内容后明确采用或编辑合并。Android 系统返回、键盘和安全区继续适配，Cupertino 外观不代表已经完成 iOS 设备验证。
 
+“添加更多信息”可展开昵称、姓名拼音、地址、即时消息、网站和手工关联人。已有非空资料自动显示；职位位于公司组，姓名前后缀位于姓名细分。地址/IM/关联人沿用连续空行、类型选择和逐条删除，空行不保存；移除可选分组在当前草稿中清空对应资料，取消编辑可放弃修改。详情支持选择复制，新增字段参与搜索和完整联系人冲突展示。网站、地址、IM 暂不启动外部应用，拼音手填且不生成首字母索引。第二阶段支持群组及 App 联系人关联，头像仍后置。
+
+扩展资料是 v2 可选字段，旧联系人无需批量改写；填写新字段之前须升级同一通讯录的所有客户端，旧版不能读取新字段。详见 [核心契约](../../docs/CORE.md)。
+
 颜色和尺寸在 `lib/ui/theme.dart`、`lib/ui/tokens.dart`；共享组件按职责拆分到 `lib/ui/components/`，`lib/design.dart` 仅统一导出，约定见 [UI_DESIGN.md](UI_DESIGN.md)。保留现有模型、Rust 农历选项及保存/同步/冲突契约。
 
 ## 构建
@@ -36,7 +40,7 @@ bash apps/card-weave/tool/build_android.sh
 
 TLS AAR 版本从 Rust Cargo.lock 中的 `rustls-platform-verifier-android` 读取，默认使用项目官方 maven-archive。网络不可用时可用 `CARDWEAVE_RUSTLS_MAVEN` 指向来自同一官方版本的本地 Maven 缓存。Android Activity 在网络前初始化 Application Context，不修改平台信任规则。
 
-软件渲染虚拟机可在构建时设置 `CARDWEAVE_SOFTWARE_RENDERING=1`；默认使用平台渲染。调试包应用 ID 为 `io.cardweave.app`，不覆盖此前 M0 探针。
+软件渲染虚拟机可在构建时设置 `CARDWEAVE_SOFTWARE_RENDERING=1`；默认使用平台渲染。调试包应用 ID 为 `io.cardweave.app`，不覆盖此前 M0 探针。设置 `CARDWEAVE_ACCEPTANCE=1` 时构建独立的 `io.cardweave.app.acceptance` 验证包，安装、数据和测试卸载均与正式应用隔离；默认构建不设置此变量。
 
 ## 验证与绑定生成
 
@@ -72,3 +76,20 @@ flutter test integration_test/android_flow_test.dart --no-pub --no-uninstall -d 
 公共组件布局回归：`flutter test --no-pub test/components_test.dart`（窄屏、200% 字号、深浅色）。开发预览为 `lib/ui/gallery.dart`，不出现在产品导航。
 
 日期控件回归：`flutter test --no-pub test/date_picker_test.dart`。`integration_test/date_flow_test.dart` 使用当前应用目录，创建一个唯一名称的合成联系人，经实际页面保存、编辑、数据库重开后删除该测试联系人；测试代码只删除自己创建的联系人，但 Flutter 设备测试器可能重装或卸载应用，必须使用无个人数据的隔离测试实例，不在日常使用实例上运行。
+
+扩展资料 Android 验收（专用无个人数据设备）：
+
+```sh
+CARDWEAVE_ACCEPTANCE=1 bash tool/build_android.sh
+CARDWEAVE_ACCEPTANCE=1 flutter test integration_test/expanded_fields_test.dart --no-pub -d DEVICE
+```
+
+该测试验证所有扩展字段实际填写、删除地址行、取消、保存、清空网站、SQLite 重开与搜索，不需要 TLS fixture。CLI `scripts/acceptance.py` 验证这些资料在 Fs/WebDAV/S3 本地参考服务的三副本同步和显式冲突解决。二者与完整 Android HTTPS 流程是不同的验证边界。
+
+## 群组与关联联系人
+
+联系人首页“列表”管理自定义群组、切换全部/未分组/群组范围。群组成员支持搜索多选；详情“群组”调整所属群组。删除群组不删除联系人，成员并发加入/移出需要明确解决冲突。关联人可手填或选择 App 联系人，目标改名自动展示新名，目标不可用保留姓名快照。
+
+既有通讯录需从设置主动升级后使用群组；原库保留，新加入信息需要在其他升级后的设备重新加入。请先汇集所有设备修改并处理冲突，不直接替换数据库文件。数据和 CLI 约定见 [群组与升级](../../docs/GROUPS.md)。
+
+第二阶段 Android 验收：`CARDWEAVE_ACCEPTANCE=1 flutter test integration_test/groups_test.dart --no-pub -d DEVICE`，先以相同环境变量执行构建脚本。测试实例与普通应用隔离，不能使用普通 applicationId 运行会卸载实例的集成测试。
