@@ -1,6 +1,6 @@
 use card_weave_core::{
-    AddressBook, Calendar, Cancellation, ContactData, Error, Resolution, calendar_date,
-    calendar_options,
+    AddressBook, Calendar, Cancellation, ContactData, Error, GroupCommand, Resolution,
+    calendar_date, calendar_options,
 };
 use lfs_sqlite::NetworkError;
 use lfs_storage::{OpenDalTransport, Options, S3Credentials, WebdavCredentials};
@@ -17,6 +17,15 @@ use std::{
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    RelationViews {
+        contact: Box<ContactData>,
+    },
+    Groups {
+        request: GroupCommand,
+    },
+    Migrate {
+        destination: String,
+    },
     CalendarDate {
         calendar: Calendar,
         year: u16,
@@ -189,7 +198,9 @@ impl Host {
             }
             if matches!(
                 command,
-                Command::Create { .. }
+                Command::Groups { .. }
+                    | Command::Migrate { .. }
+                    | Command::Create { .. }
                     | Command::Save { .. }
                     | Command::Delete { .. }
                     | Command::Resolve { .. }
@@ -203,6 +214,11 @@ impl Host {
                 .map_err(|_| Error::Invalid("host unavailable"))?;
             let book = state.as_mut().ok_or(Error::Invalid("not open"))?;
             match command {
+                Command::RelationViews { contact } => encode(book.relation_views(&contact)?),
+                Command::Groups { request } => encode(book.groups(request)?),
+                Command::Migrate { destination } => {
+                    encode(book.migrate_to(Path::new(&destination))?)
+                }
                 Command::CalendarOptions { .. } | Command::CalendarDate { .. } => unreachable!(),
                 Command::Identity => encode(book.config()),
                 Command::List { search, offset } => encode(book.list(&search, 50, offset)?),

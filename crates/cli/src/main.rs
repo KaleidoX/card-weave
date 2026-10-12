@@ -1,12 +1,16 @@
 use card_weave_core::{
-    AddressBook, Cancellation, ContactData, Error, MAX_DOCUMENT_BYTES, Resolution, Result,
-    backend::Backend, read_bounded,
+    AddressBook, Cancellation, ContactData, Error, GroupCommand, MAX_DOCUMENT_BYTES, Resolution,
+    Result, backend::Backend, read_bounded,
 };
 use serde_json::{Value, json};
 use std::path::Path;
 
 const HELP: &str = "card-weave HOME COMMAND [ARGS]\n\
   init [DATASET]                 create a NEW directory / join a dataset\n\
+  init-legacy [DATASET]           explicit legacy schema fixture/interoperation\n\
+  migrate NEW_HOME               copy a settled legacy book into a fresh dataset\n\
+  groups REQUEST.json            group/membership operation (see docs/GROUPS.md)\n\
+  relation-views CONTACT.json     resolve linked contact display states\n\
   info                           persistent dataset/device identity\n\
   create CONTACT.json            create a contact, return generated ID\n\
   get ID                         contact projection and any conflict\n\
@@ -44,9 +48,13 @@ async fn run(args: Vec<String>) -> Result<(Value, u8)> {
     let home = Path::new(&args[0]);
     let command = args[1].as_str();
     let tail = &args[2..];
-    if command == "init" {
+    if command == "init" || command == "init-legacy" {
         args_len(tail, 0, 1)?;
-        let mut book = AddressBook::init(home, tail.first().cloned())?;
+        let mut book = if command == "init-legacy" {
+            AddressBook::init_legacy(home, tail.first().cloned())?
+        } else {
+            AddressBook::init(home, tail.first().cloned())?
+        };
         let result = json!(book.config());
         book.close()?;
         return Ok((result, 0));
@@ -54,6 +62,20 @@ async fn run(args: Vec<String>) -> Result<(Value, u8)> {
     let mut book = AddressBook::open(home)?;
     let mut exit = 0;
     let value = match command {
+        "relation-views" => {
+            args_len(tail, 1, 1)?;
+            book.relation_views(&contact(&tail[0])?)?
+        }
+        "groups" => {
+            args_len(tail, 1, 1)?;
+            let command: GroupCommand =
+                serde_json::from_slice(&read_bounded(Path::new(&tail[0]), 512 * 1024)?)?;
+            book.groups(command)?
+        }
+        "migrate" => {
+            args_len(tail, 1, 1)?;
+            json!(book.migrate_to(Path::new(&tail[0]))?)
+        }
         "info" => {
             args_len(tail, 0, 0)?;
             json!(book.config())
@@ -124,7 +146,7 @@ async fn main() -> std::process::ExitCode {
         }
         Err(error) => {
             let exit = match error.code() {
-                "invalid_input" | "not_found" => 2,
+                "invalid_input" | "not_found" | "duplicate_group_name" => 2,
                 "conflict_requires_resolution" => 3,
                 _ => 4,
             };

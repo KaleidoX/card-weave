@@ -1,12 +1,16 @@
 pub mod backend;
 mod calendar;
 pub use calendar::{CalendarDate, CalendarMonth, CalendarOptions, calendar_date, calendar_options};
+mod groups;
+mod migration;
+pub use groups::{GroupCommand, GroupMembershipChange, MembershipChange};
 mod model;
 use lfs_protocol::OpId;
 use lfs_sqlite::{Baseline, Column, ColumnType, Identity, Schema, Sdk, Table, Value};
 pub use lfs_sqlite::{Cancellation, SyncLimits, Transport};
 pub use model::{
     Calendar, Contact, ContactData, ContactDate, DateKind, LabeledValue, MAX_DOCUMENT_BYTES,
+    Relation,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,6 +25,7 @@ pub enum Error {
     Invalid(&'static str),
     NotFound,
     EditStale,
+    DuplicateGroupName,
     Conflict,
     Io(std::io::Error),
     Json(serde_json::Error),
@@ -32,6 +37,7 @@ impl Error {
             Self::Invalid(_) | Self::Json(_) => "invalid_input",
             Self::NotFound => "not_found",
             Self::EditStale => "edit_stale",
+            Self::DuplicateGroupName => "duplicate_group_name",
             Self::Conflict => "conflict_requires_resolution",
             Self::Io(_) => "io_error",
             Self::Sdk(e) => match e {
@@ -94,8 +100,8 @@ fn random_id() -> Result<String> {
     getrandom::fill(&mut bytes).map_err(|_| Error::Invalid("OS randomness unavailable"))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
-fn schema() -> Schema {
-    Schema {
+fn schema(version: u32) -> Schema {
+    let mut schema = Schema {
         version: 1,
         tables: vec![Table {
             id: 1,
@@ -108,7 +114,32 @@ fn schema() -> Schema {
                 })
                 .to_vec(),
         }],
+    };
+    if version == 2 {
+        schema.version = 2;
+        for (id, name, columns) in [
+            (2, "groups", vec!["id", "name", "document"]),
+            (
+                3,
+                "memberships",
+                vec!["id", "group_id", "contact_id", "state"],
+            ),
+        ] {
+            schema.tables.push(Table {
+                id,
+                name: name.into(),
+                columns: columns
+                    .into_iter()
+                    .map(|name| Column {
+                        name: name.into(),
+                        kind: ColumnType::Text,
+                        nullable: false,
+                    })
+                    .collect(),
+            });
+        }
     }
+    schema
 }
 pub fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
@@ -240,8 +271,19 @@ pub struct AddressBook {
 impl AddressBook {
     /// Creates a new owned directory. Existing directories are never overwritten.
     pub fn init(home: &Path, dataset: Option<String>) -> Result<Self> {
+        Self::init_version(home, dataset, 2, false)
+    }
+    pub fn init_legacy(home: &Path, dataset: Option<String>) -> Result<Self> {
+        Self::init_version(home, dataset, 1, false)
+    }
+    fn init_version(
+        home: &Path,
+        dataset: Option<String>,
+        version: u32,
+        pending: bool,
+    ) -> Result<Self> {
         let config = Config {
-            version: 1,
+            version,
             dataset: dataset.unwrap_or(random_id()?),
             device: random_id()?,
             incarnation: random_id()?,
@@ -249,10 +291,13 @@ impl AddressBook {
         config.identity().validate().map_err(Error::Invalid)?;
         fs::create_dir(home)?;
         let result = (|| {
+            if pending {
+                fs::File::create(home.join("migration.pending"))?.sync_all()?;
+            }
             let sdk = Sdk::open(
                 home.join("contacts.sqlite"),
                 config.identity(),
-                schema(),
+                schema(config.version),
                 Baseline::Reject,
             )?;
             let mut file = fs::OpenOptions::new()
@@ -271,7 +316,10 @@ impl AddressBook {
     pub fn open(home: &Path) -> Result<Self> {
         let config: Config =
             serde_json::from_slice(&read_bounded(&home.join("identity.json"), 4096)?)?;
-        if config.version != 1 || !home.join("contacts.sqlite").is_file() {
+        if ![1, 2].contains(&config.version)
+            || !home.join("contacts.sqlite").is_file()
+            || home.join("migration.pending").exists()
+        {
             return Err(Error::Invalid(
                 "incomplete address book or unsupported config",
             ));
@@ -280,16 +328,60 @@ impl AddressBook {
         let sdk = Sdk::open(
             home.join("contacts.sqlite"),
             config.identity(),
-            schema(),
+            schema(config.version),
             Baseline::Reject,
         )?;
         Ok(Self { sdk, config })
+    }
+    fn validate_relations(&mut self, id: &str, data: &ContactData) -> Result<()> {
+        let previous = self.get(id)?.map(|c| c.data.relations).unwrap_or_default();
+        for r in &data.relations {
+            if let Some(target) = &r.target_contact_id {
+                if target == id {
+                    return Err(Error::Invalid("self relation"));
+                }
+                if !previous
+                    .iter()
+                    .any(|old| old.target_contact_id.as_ref() == Some(target))
+                    && self.get(target)?.is_none_or(|c| c.has_conflict)
+                {
+                    return Err(Error::EditStale);
+                }
+            }
+        }
+        Ok(())
+    }
+    pub fn relation_views(&mut self, data: &ContactData) -> Result<serde_json::Value> {
+        let mut views = Vec::new();
+        for relation in &data.relations {
+            let target = relation
+                .target_contact_id
+                .as_ref()
+                .map(|id| self.get(id))
+                .transpose()?
+                .flatten();
+            let (name, state) = match target {
+                Some(c) if !c.has_conflict => (c.data.display_name, "available"),
+                Some(_) => (relation.value.clone(), "conflict"),
+                None => (
+                    relation.value.clone(),
+                    if relation.target_contact_id.is_some() {
+                        "unavailable"
+                    } else {
+                        "manual"
+                    },
+                ),
+            };
+            views.push(serde_json::json!({"label":relation.label,"value":relation.value,"target_contact_id":relation.target_contact_id,"name":name,"state":state}));
+        }
+        Ok(serde_json::json!(views))
     }
     pub fn config(&self) -> &Config {
         &self.config
     }
     pub fn create(&mut self, data: ContactData) -> Result<Contact> {
         let id = random_id()?;
+        self.validate_relations(&id, &data)?;
         let values = row(&id, &data)?;
         self.sdk
             .write_transaction(|w| w.execute("INSERT INTO contacts VALUES (?1,?2,?3)", &values))?;
@@ -301,7 +393,11 @@ impl AddressBook {
     }
     pub fn get(&mut self, id: &str) -> Result<Option<Contact>> {
         valid_key(id)?;
-        let conflict = self.sdk.list_conflicts()?.iter().any(|c| c.key == id);
+        let conflict = self
+            .sdk
+            .list_conflicts()?
+            .iter()
+            .any(|c| c.table == 1 && c.key == id);
         let rows = self.sdk.read(|r| {
             r.query(
                 "SELECT id,display_name,document FROM contacts WHERE id=?1",
@@ -350,8 +446,25 @@ impl AddressBook {
                         .chain(&data.emails)
                         .chain(&data.addresses)
                         .chain(&data.instant_messages)
-                        .chain(&data.relations)
                         .any(|v| v.value.to_lowercase().contains(&needle));
+                let mut found = found
+                    || data
+                        .relations
+                        .iter()
+                        .any(|r| r.value.to_lowercase().contains(&needle));
+                if !found {
+                    for relation in &data.relations {
+                        if let Some(target) = &relation.target_contact_id
+                            && self.get(target)?.is_some_and(|c| {
+                                !c.has_conflict
+                                    && c.data.display_name.to_lowercase().contains(&needle)
+                            })
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
                 if !found {
                     continue;
                 }
@@ -359,7 +472,9 @@ impl AddressBook {
                     skipped += 1;
                     continue;
                 }
-                contact.has_conflict = conflicts.iter().any(|c| c.key == contact.id);
+                contact.has_conflict = conflicts
+                    .iter()
+                    .any(|c| c.table == 1 && c.key == contact.id);
                 matches.push(contact);
                 if matches.len() == limit as usize {
                     return Ok(matches);
@@ -371,7 +486,12 @@ impl AddressBook {
 
     fn writable(&mut self, id: &str) -> Result<()> {
         valid_key(id)?;
-        if self.sdk.list_conflicts()?.iter().any(|c| c.key == id) {
+        if self
+            .sdk
+            .list_conflicts()?
+            .iter()
+            .any(|c| c.table == 1 && c.key == id)
+        {
             return Err(Error::Conflict);
         }
         if self.get(id)?.is_none() {
@@ -381,6 +501,7 @@ impl AddressBook {
     }
     pub fn update(&mut self, id: &str, data: ContactData) -> Result<Contact> {
         self.writable(id)?;
+        self.validate_relations(id, &data)?;
         let values = row(id, &data)?;
         self.sdk.write_transaction(|w| {
             w.execute(
@@ -411,6 +532,9 @@ impl AddressBook {
             Error::NotFound => Error::EditStale,
             other => other,
         })?;
+        if let Some(data) = &replacement {
+            self.validate_relations(id, data)?;
+        }
         expected.validate()?;
         let expected = serde_json::to_string(expected)?;
         let values = replacement.as_ref().map(|data| row(id, data)).transpose()?;
@@ -448,6 +572,7 @@ impl AddressBook {
         self.sdk
             .list_conflicts()?
             .into_iter()
+            .filter(|conflict| conflict.table == 1)
             .map(|conflict| {
                 let candidates = conflict
                     .heads
@@ -470,6 +595,9 @@ impl AddressBook {
         valid_key(id)?;
         if resolution.observed.is_empty() || resolution.observed.len() > 1000 {
             return Err(Error::Invalid("observed versions required (max 1000)"));
+        }
+        if let Some(data) = &resolution.contact {
+            self.validate_relations(id, data)?;
         }
         let parents = resolution
             .observed

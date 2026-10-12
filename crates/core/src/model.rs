@@ -11,6 +11,15 @@ pub struct LabeledValue {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Relation {
+    pub label: String,
+    pub value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_contact_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Calendar {
     Gregorian,
@@ -74,7 +83,7 @@ pub struct ContactData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub instant_messages: Vec<LabeledValue>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub relations: Vec<LabeledValue>,
+    pub relations: Vec<Relation>,
     #[serde(default)]
     pub organization: String,
     #[serde(default)]
@@ -132,17 +141,27 @@ impl ContactData {
                 text(&item.value, 1024, true)?;
             }
         }
-        for (items, max_value) in [
-            (&self.addresses, 4096),
-            (&self.instant_messages, 1024),
-            (&self.relations, 1024),
-        ] {
+        for (items, max_value) in [(&self.addresses, 4096), (&self.instant_messages, 1024)] {
             if items.len() > 32 {
                 return Err(Error::Invalid("at most 32 entries per field"));
             }
             for item in items {
                 text(&item.label, 128, true)?;
                 text(&item.value, max_value, true)?;
+            }
+        }
+        if self.relations.len() > 32 {
+            return Err(Error::Invalid("at most 32 relations"));
+        }
+        let mut targets = std::collections::BTreeSet::new();
+        for relation in &self.relations {
+            text(&relation.label, 128, true)?;
+            text(&relation.value, 1024, true)?;
+            if let Some(id) = &relation.target_contact_id {
+                crate::valid_key(id)?;
+                if !targets.insert((&relation.label, id)) {
+                    return Err(Error::Invalid("duplicate relation"));
+                }
             }
         }
         if self.dates.len() > 32 {
