@@ -22,6 +22,7 @@ class AppWheel extends StatefulWidget {
 }
 
 class _AppWheelState extends State<AppWheel> {
+  bool correctingSelection = false;
   late final controller = FixedExtentScrollController(
     initialItem: widget.selected,
   );
@@ -31,7 +32,12 @@ class _AppWheelState extends State<AppWheel> {
     if (widget.selected != oldWidget.selected &&
         controller.hasClients &&
         controller.selectedItem != widget.selected) {
-      controller.jumpToItem(widget.selected);
+      correctingSelection = true;
+      try {
+        controller.jumpToItem(widget.selected);
+      } finally {
+        correctingSelection = false;
+      }
     }
   }
 
@@ -53,7 +59,9 @@ class _AppWheelState extends State<AppWheel> {
             MediaQuery.textScalerOf(context).scale(AppTokens.body) /
             AppTokens.body,
         childCount: widget.count,
-        onSelectedItemChanged: widget.onChanged,
+        onSelectedItemChanged: (value) {
+          if (!correctingSelection) widget.onChanged(value);
+        },
         itemBuilder: (_, i) => Center(
           child: Text(
             widget.text(i),

@@ -31,6 +31,7 @@ class _CalendarWheelsState extends State<CalendarWheels> {
   bool loading = true;
   bool failed = false;
   int request = 0;
+  Timer? yearUpdate;
 
   int get monthIndex => months.indexWhere(
     (m) => m['month'] == d['month'] && m['is_leap_month'] == d['is_leap_month'],
@@ -66,7 +67,7 @@ class _CalendarWheelsState extends State<CalendarWheels> {
     });
     report();
     try {
-      final base = await widget.options(calendar, null);
+      final base = limits ?? await widget.options(calendar, null);
       if (!mounted || ticket != request) return;
       setState(() => limits = base);
       final result = year == null ? base : await widget.options(calendar, year);
@@ -95,8 +96,23 @@ class _CalendarWheelsState extends State<CalendarWheels> {
 
   void changeYear(int? value) {
     if (d['year'] == value) return;
-    setState(() => d['year'] = value);
-    unawaited(load());
+    ++request;
+    setState(() {
+      d['year'] = value;
+      loading = true;
+      failed = false;
+    });
+    report();
+    yearUpdate ??= Timer(const Duration(milliseconds: 150), () {
+      yearUpdate = null;
+      unawaited(load());
+    });
+  }
+
+  @override
+  void dispose() {
+    yearUpdate?.cancel();
+    super.dispose();
   }
 
   void chooseYear() {
@@ -122,14 +138,18 @@ class _CalendarWheelsState extends State<CalendarWheels> {
     String Function(int) text,
     ValueChanged<int> changed, {
     Object? identity,
+    bool enabled = true,
   }) => Expanded(
-    child: AppWheel(
-      key: ValueKey('$label-$identity'),
-      label: label,
-      count: count,
-      selected: selected,
-      text: text,
-      onChanged: changed,
+    child: IgnorePointer(
+      ignoring: !enabled,
+      child: AppWheel(
+        key: ValueKey('$label-$identity'),
+        label: label,
+        count: count,
+        selected: selected,
+        text: text,
+        onChanged: changed,
+      ),
     ),
   );
   @override
@@ -146,7 +166,10 @@ class _CalendarWheelsState extends State<CalendarWheels> {
             groupValue: d['calendar'],
             onValueChanged: (v) {
               if (v == null) return;
+              yearUpdate?.cancel();
+              yearUpdate = null;
               setState(() {
+                months = [];
                 d['calendar'] = v;
                 d['month'] = null;
                 d['is_leap_month'] = false;
@@ -172,7 +195,7 @@ class _CalendarWheelsState extends State<CalendarWheels> {
                 ),
                 identity: d['calendar'],
               ),
-            if (!loading && !failed) ...[
+            if (months.isNotEmpty) ...[
               wheel(
                 '月份',
                 months.length + 1,
@@ -185,6 +208,7 @@ class _CalendarWheelsState extends State<CalendarWheels> {
                       : '${m['month']} 月';
                 },
                 (i) {
+                  if (loading || failed) return;
                   setState(() {
                     d['month'] = i == 0 ? null : months[i - 1]['month'];
                     d['is_leap_month'] = i == 0
@@ -194,7 +218,8 @@ class _CalendarWheelsState extends State<CalendarWheels> {
                   });
                   report();
                 },
-                identity: '${d['calendar']}-${d['year']}',
+                identity: d['calendar'],
+                enabled: !loading && !failed,
               ),
               wheel(
                 '日期',
@@ -206,16 +231,18 @@ class _CalendarWheelsState extends State<CalendarWheels> {
                     ? lunarDay(i)
                     : '$i 日',
                 (i) {
+                  if (loading || failed) return;
                   setState(() => d['day'] = i == 0 ? null : i);
                   report();
                 },
                 identity:
-                    '${d['calendar']}-${d['year']}-${d['month']}-${d['is_leap_month']}',
+                    '${d['calendar']}-${d['month']}-${d['is_leap_month']}',
+                enabled: !loading && !failed,
               ),
             ],
           ],
         ),
-        if (loading)
+        if (loading && months.isEmpty)
           const Padding(
             padding: AppTokens.pagePadding,
             child: CupertinoActivityIndicator(),

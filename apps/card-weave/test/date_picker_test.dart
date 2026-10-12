@@ -213,6 +213,42 @@ void main() {
     expect(result!.single, birthday);
   });
 
+  testWidgets(
+    'Year scrolling throttles calculations and keeps dependent wheels visible',
+    (t) async {
+      final calls = <int?>[];
+      final pending = Completer<Map<String, dynamic>>();
+      await open(
+        t,
+        [Map<String, dynamic>.from(birthday)],
+        (_) {},
+        options: (c, y) {
+          calls.add(y);
+          return y == 2021 ? pending.future : fixtureOptions(c, y);
+        },
+      );
+      await tap(t, '2024年2月29日');
+      calls.clear();
+      final year = t.widget<CupertinoPicker>(
+        find.byType(CupertinoPicker).first,
+      );
+      year.onSelectedItemChanged!(2023);
+      await t.pump(const Duration(milliseconds: 40));
+      year.onSelectedItemChanged!(2022);
+      await t.pump(const Duration(milliseconds: 40));
+      year.onSelectedItemChanged!(2021);
+      await t.pump(const Duration(milliseconds: 40));
+      expect(calls, isEmpty);
+      await t.pump(const Duration(milliseconds: 30));
+      expect(calls, [2021]);
+      expect(find.byType(CupertinoPicker), findsNWidgets(3));
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      pending.complete(await fixtureOptions('gregorian', 2021));
+      await t.pumpAndSettle();
+      expect(find.byType(CupertinoPicker), findsNWidgets(3));
+    },
+  );
+
   testWidgets('Late calendar responses cannot replace a newer year selection', (
     t,
   ) async {
