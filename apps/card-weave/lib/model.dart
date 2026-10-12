@@ -48,6 +48,7 @@ Map<String, dynamic> emptyContact() => {
   'version': 2,
   'display_name': '',
   'given_name': '',
+  'middle_name': '',
   'family_name': '',
   'organization': '',
   'notes': '',

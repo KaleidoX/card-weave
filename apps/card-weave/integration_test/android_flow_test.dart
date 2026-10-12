@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -30,7 +29,9 @@ void main() {
       }
 
       Future<void> tap(String text) async {
-        final f = find.text(text).last;
+        final f = text == '新建联系人'
+            ? find.bySemanticsLabel(RegExp('新建联系人'))
+            : find.text(text).last;
         await tester.ensureVisible(f);
         await tester.pumpAndSettle();
         await tester.tap(f);
@@ -38,9 +39,7 @@ void main() {
       }
 
       Future<void> enter(String label, String value) async {
-        final f = find.byWidgetPredicate(
-          (w) => w is TextField && w.decoration?.labelText == label,
-        );
+        final f = find.byKey(ValueKey('input-$label')).first;
         await tester.ensureVisible(f);
         await tester.pumpAndSettle();
         await tester.enterText(f, value);
@@ -59,23 +58,19 @@ void main() {
         await waitFor(() => !model.syncing);
         expect(model.status['pending_outbox'], 0);
         expect(model.conflicts, isEmpty);
-        await tap('通讯录');
+        await tap('联系人');
         await tap('新建联系人');
         await enter('姓名', '待删除的验证联系人');
         await tap('添加日期');
         await tap('公历生日');
         await tap('农历生日');
-        await tester.ensureVisible(find.text('请选择'));
-        await tester.drag(find.text('请选择'), const Offset(0, -44));
+        final month = find.byType(CupertinoPicker).at(1);
+        tester.widget<CupertinoPicker>(month).scrollController!.jumpToItem(2);
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.byType(CupertinoPicker).first);
-        await tester.drag(
-          find.byType(CupertinoPicker).first,
-          const Offset(0, -44),
-        );
+        final day = find.byType(CupertinoPicker).at(2);
+        tester.widget<CupertinoPicker>(day).scrollController!.jumpToItem(1);
         await tester.pumpAndSettle();
-        await tap('确定');
-        await tap('保存');
+        await tap('完成');
         await waitFor(() => model.contacts.length == 2);
         final lunar = model.contacts
             .firstWhere(
@@ -86,7 +81,7 @@ void main() {
         expect(lunar['year'], isNull);
         expect(lunar['is_leap_month'], true);
         final search = find.byWidgetPredicate(
-          (w) => w is TextField && w.decoration?.hintText == '搜索姓名、电话、邮箱或备注',
+          (w) => w is CupertinoTextField && w.placeholder == '搜索',
         );
         await tester.enterText(search, '待删除');
         await tester.pump(const Duration(milliseconds: 400));
@@ -95,7 +90,14 @@ void main() {
         await tap('删除联系人');
         await tap('确认删除');
         await waitFor(() => model.contacts.isEmpty);
-        await tester.tap(find.byTooltip('清除搜索'));
+        await tester.tap(
+          find
+              .descendant(
+                of: find.byType(CupertinoSearchTextField),
+                matching: find.byType(CupertinoButton),
+              )
+              .last,
+        );
         await tester.pumpAndSettle();
         await waitFor(() => model.contacts.length == 1);
         expect(model.contacts.single['data']['display_name'], '最终联系人');
@@ -106,17 +108,26 @@ void main() {
       await tap('创建本地通讯录');
       await waitFor(() => model.initialized && !model.loading);
       await tap('新建联系人');
-      await tap('保存');
+      await tap('完成');
       expect(find.text('请填写姓名'), findsOneWidget);
       await enter('姓名', '测试联系人 🌿');
-      await enter('组织', 'CardWeave 验证');
-      await tap('添加电话');
+      await enter('公司', 'CardWeave 验证');
+
       await enter('电话', '13800138000');
-      await tap('添加邮箱');
+
       await enter('邮箱', 'fixture@example.invalid');
       await tap('添加日期');
-      await tap('确定');
-      await tap('保存');
+      tester
+          .widget<CupertinoPicker>(find.byType(CupertinoPicker).at(1))
+          .scrollController!
+          .jumpToItem(1);
+      await tester.pumpAndSettle();
+      tester
+          .widget<CupertinoPicker>(find.byType(CupertinoPicker).at(2))
+          .scrollController!
+          .jumpToItem(1);
+      await tester.pumpAndSettle();
+      await tap('完成');
       await waitFor(() => model.contacts.length == 1);
       expect(
         model.contacts.single['data']['phones'][0]['value'],
@@ -124,11 +135,11 @@ void main() {
       );
       final id = model.contacts.single['id'] as String;
       await tap('设置');
-      await enter('HTTPS 服务地址', 'https://127.0.0.1:18941');
+      await enter('服务地址', 'https://127.0.0.1:18941');
       await enter('用户名', 'm0-fixture');
       await enter('密码', 'synthetic-test-only');
       await tester.ensureVisible(find.text('记住凭据'));
-      await tester.tap(find.byType(Switch));
+      await tester.tap(find.byType(CupertinoSwitch));
       await tester.pumpAndSettle();
       await tap('保存同步配置');
       await waitFor(() => model.config.isNotEmpty);
@@ -171,9 +182,9 @@ void main() {
       var second = object(await command('get', {'id': id}));
       expect(second['data']['display_name'], '测试联系人 🌿');
       // A visible editor remains open while another device updates the saved document.
-      await tap('通讯录');
+      await tap('联系人');
       await tap('测试联系人 🌿');
-      await tester.tap(find.byTooltip('编辑联系人'));
+      await tester.tap(find.text('编辑'));
       await tester.pumpAndSettle();
       await enter('姓名', '未提交草稿');
       var data = object(second['data']);
@@ -186,11 +197,11 @@ void main() {
       await peerSync();
       await model.synchronize();
       await tester.pumpAndSettle();
-      await tap('保存');
+      await tap('完成');
       await waitFor(() => find.textContaining('草稿已保留').evaluate().isNotEmpty);
       expect((await model.get(id))!['data']['display_name'], '另一设备修改');
       expect(find.text('未提交草稿'), findsOneWidget);
-      await tester.tap(find.byTooltip('返回'));
+      await tester.tap(find.byKey(const ValueKey('cancel-contact')));
       await tester.pumpAndSettle();
       await tap('放弃修改');
       await tester.pumpAndSettle();
@@ -198,10 +209,10 @@ void main() {
       await tester.pumpAndSettle();
       // Two disconnected replicas now edit versus delete the same contact.
       await tap('另一设备修改');
-      await tester.tap(find.byTooltip('编辑联系人'));
+      await tester.tap(find.text('编辑'));
       await tester.pumpAndSettle();
       await enter('姓名', '最终联系人');
-      await tap('保存');
+      await tap('完成');
       await waitFor(
         () => model.contacts.single['data']['display_name'] == '最终联系人',
       );
@@ -216,7 +227,19 @@ void main() {
       expect(model.conflicts.length, 1);
       await tap('1 位联系人需要处理冲突');
       await tap('最终联系人');
+      await tester.scrollUntilVisible(
+        find.text('删除版本'),
+        250,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('删除版本'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('采用此版本'),
+        -250,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       await tap('采用此版本');
       await tap('确认采用');
       await waitFor(() => model.conflicts.isEmpty);
@@ -233,7 +256,7 @@ void main() {
       expect(model.status['pending_outbox'], 0);
       await command('close');
       await Directory(peerPath).delete(recursive: true);
-      await tap('通讯录');
+      await tap('联系人');
       expect(find.text('最终联系人'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

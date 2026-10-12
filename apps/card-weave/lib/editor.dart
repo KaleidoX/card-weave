@@ -1,64 +1,13 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import 'model.dart';
-import 'date_picker.dart';
-
-class ContactContent extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final Set<String> differences;
-  const ContactContent(this.data, {super.key, this.differences = const {}});
-  @override
-  Widget build(BuildContext context) {
-    Widget item(String field, String label, String value) => value.isEmpty
-        ? const SizedBox.shrink()
-        : Container(
-            decoration: BoxDecoration(
-              color: differences.contains(field)
-                  ? Theme.of(context).colorScheme.tertiaryContainer
-                  : null,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: Theme.of(context).textTheme.labelMedium),
-                const SizedBox(height: 4),
-                SelectableText(value),
-              ],
-            ),
-          );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        item('display_name', '姓名', data['display_name'] as String),
-        item('given_name', '名', data['given_name'] as String? ?? ''),
-        item('family_name', '姓', data['family_name'] as String? ?? ''),
-        item('organization', '组织', data['organization'] as String? ?? ''),
-        for (final pair in [('phones', '电话'), ('emails', '邮箱')])
-          item(
-            pair.$1,
-            pair.$2,
-            (data[pair.$1] as List)
-                .map((e) => '${e['label']}  ${e['value']}')
-                .join('\n'),
-          ),
-        item(
-          'dates',
-          '重要日期',
-          (data['dates'] as List)
-              .map((e) => '${dateType(object(e))} · ${dateText(object(e))}')
-              .join('\n'),
-        ),
-        item('notes', '备注', data['notes'] as String? ?? ''),
-      ],
-    );
-  }
-}
+import 'contacts/dates_group.dart';
+import 'contacts/contact_content.dart';
+import 'design.dart';
+import 'contacts/name_group.dart';
+import 'contacts/values_group.dart';
 
 class ContactEditor extends StatefulWidget {
   final AppModel model;
@@ -80,23 +29,28 @@ class _ContactEditorState extends State<ContactEditor> {
     widget.seed ?? widget.original?['data'] ?? emptyContact(),
   );
   late final String initial = jsonEncode(data);
-  bool saving = false, leaving = false, editingDate = false;
+  bool saving = false,
+      leaving = false,
+      editingDate = false,
+      pendingName = false;
   String? error;
-  bool get dirty => editingDate || jsonEncode(data) != initial;
+  bool get dirty => pendingName || editingDate || jsonEncode(data) != initial;
   Future<bool> discard() async =>
       !dirty ||
-      await showDialog<bool>(
+      await showCupertinoDialog<bool>(
             context: context,
-            builder: (c) => AlertDialog(
+            builder: (c) => AppDialog(
               title: const Text('放弃未保存的修改？'),
               content: const Text('联系人原有内容会保留。'),
               actions: [
-                TextButton(
+                CupertinoDialogAction(
                   onPressed: () => Navigator.pop(c, false),
                   child: const Text('继续编辑'),
                 ),
-                FilledButton(
+                CupertinoDialogAction(
+                  isDefaultAction: true,
                   onPressed: () => Navigator.pop(c, true),
+                  isDestructiveAction: true,
                   child: const Text('放弃修改'),
                 ),
               ],
@@ -113,6 +67,7 @@ class _ContactEditorState extends State<ContactEditor> {
 
   Future<void> save() async {
     if (!form.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     setState(() {
       saving = true;
       error = null;
@@ -139,75 +94,19 @@ class _ContactEditorState extends State<ContactEditor> {
     String title, {
     bool required = false,
     int lines = 1,
-  }) => TextFormField(
+  }) => AppInput(
+    label: title,
     initialValue: data[key] as String? ?? '',
-    decoration: InputDecoration(
-      labelText: title,
-      alignLabelWithHint: lines > 1,
-    ),
-    maxLines: lines,
-    textCapitalization: TextCapitalization.sentences,
+    minLines: lines,
+    labelVisible: lines == 1,
     onChanged: (value) => setState(() => data[key] = value),
     validator: (v) => required && (v ?? '').trim().isEmpty ? '请填写$title' : null,
   );
-  Widget values(String key, String title, TextInputType type) {
-    final values = data[key] as List;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        section(title),
-        for (var i = 0; i < values.length; i++)
-          Padding(
-            key: ObjectKey(values[i]),
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 88,
-                  child: TextFormField(
-                    initialValue: values[i]['label'],
-                    decoration: const InputDecoration(labelText: '标签'),
-                    onChanged: (v) => setState(() => values[i]['label'] = v),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    initialValue: values[i]['value'],
-                    keyboardType: type,
-                    decoration: InputDecoration(labelText: title),
-                    validator: (v) => (v ?? '').trim().isEmpty ? '请填写内容' : null,
-                    onChanged: (v) => setState(() => values[i]['value'] = v),
-                  ),
-                ),
-                IconButton(
-                  tooltip: '删除$title',
-                  onPressed: () => setState(() => values.removeAt(i)),
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-              ],
-            ),
-          ),
-        TextButton.icon(
-          onPressed: values.length >= 32
-              ? null
-              : () => setState(() => values.add({'label': '', 'value': ''})),
-          icon: const Icon(Icons.add),
-          label: Text('添加$title'),
-        ),
-      ],
-    );
-  }
 
-  Widget section(String title) => Padding(
-    padding: const EdgeInsets.only(top: 24, bottom: 12),
-    child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-  );
+  Widget section(String title) => SectionLabel(title);
   Widget dates() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      section('重要日期'),
       ContactDatesEditor(
         dates: data['dates'] as List,
         options: widget.model.calendarOptions,
@@ -223,12 +122,12 @@ class _ContactEditorState extends State<ContactEditor> {
     onPopInvokedWithResult: (didPop, result) {
       if (!didPop) back();
     },
-    child: Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: '返回',
+    child: AppPage(
+      navigationBar: AppNavigation(
+        leading: AppButton(
+          key: const ValueKey('cancel-contact'),
           onPressed: back,
-          icon: const Icon(Icons.arrow_back),
+          child: const Text('取消'),
         ),
         title: Text(
           widget.conflict != null
@@ -238,105 +137,164 @@ class _ContactEditorState extends State<ContactEditor> {
               : '编辑联系人',
         ),
         actions: [
-          TextButton(
+          AppButton(
             onPressed: saving ? null : save,
-            child: Text(saving ? '正在保存…' : '保存'),
+            child: Text(saving ? '正在保存…' : '完成'),
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Form(
-            key: form,
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                if (error != null)
-                  Card(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(error!),
-                          if (widget.original != null)
-                            TextButton(
-                              onPressed: () async {
-                                try {
-                                  final fresh = await widget.model.get(
-                                    widget.original!['id'],
-                                  );
-                                  if (!context.mounted) return;
-                                  final reload = await showDialog<bool>(
-                                    context: context,
-                                    builder: (c) => AlertDialog(
-                                      title: const Text('当前已保存内容'),
-                                      content: SingleChildScrollView(
-                                        child: fresh == null
-                                            ? const Text('联系人已删除')
-                                            : ContactContent(
-                                                object(fresh['data']),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppTokens.width),
+            child: AbsorbPointer(
+              absorbing: saving,
+              child: Form(
+                key: form,
+                child: ListView(
+                  padding: AppTokens.pagePadding,
+                  children: [
+                    if (error != null)
+                      SurfaceBox(
+                        color: AppTheme.of(context).colors.errorContainer,
+                        child: Padding(
+                          padding: AppTokens.pagePadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(error!),
+                              if (widget.original != null)
+                                AppButton(
+                                  onPressed: () async {
+                                    try {
+                                      final fresh = await widget.model.get(
+                                        widget.original!['id'],
+                                      );
+                                      if (!context.mounted) return;
+                                      final reload =
+                                          await showCupertinoDialog<bool>(
+                                            context: context,
+                                            builder: (c) => AppDialog(
+                                              title: const Text('当前已保存内容'),
+                                              content: SingleChildScrollView(
+                                                child: fresh == null
+                                                    ? const Text('联系人已删除')
+                                                    : ContactContent(
+                                                        object(fresh['data']),
+                                                      ),
                                               ),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(c),
-                                          child: const Text('返回草稿'),
-                                        ),
-                                        if (fresh != null &&
-                                            fresh['has_conflict'] != true)
-                                          FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(c, true),
-                                            child: const Text('放弃草稿，以最新内容编辑'),
+                                              actions: [
+                                                CupertinoDialogAction(
+                                                  onPressed: () =>
+                                                      Navigator.pop(c),
+                                                  child: const Text('返回草稿'),
+                                                ),
+                                                if (fresh != null &&
+                                                    fresh['has_conflict'] !=
+                                                        true)
+                                                  CupertinoDialogAction(
+                                                    isDefaultAction: true,
+                                                    onPressed: () =>
+                                                        Navigator.pop(c, true),
+                                                    child: const Text(
+                                                      '放弃草稿，以最新内容编辑',
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          );
+                                      if (reload == true && context.mounted) {
+                                        Navigator.pushReplacement(
+                                          context,
+                                          CupertinoPageRoute(
+                                            builder: (_) => ContactEditor(
+                                              widget.model,
+                                              original: fresh,
+                                            ),
                                           ),
-                                      ],
-                                    ),
-                                  );
-                                  if (reload == true && context.mounted) {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ContactEditor(
-                                          widget.model,
-                                          original: fresh,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    setState(() => error = message(e));
-                                  }
-                                }
-                              },
-                              child: const Text('查看最新内容'),
-                            ),
-                        ],
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        setState(() => error = message(e));
+                                      }
+                                    }
+                                  },
+                                  child: const Text('查看最新内容'),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ContactNameGroup(
+                      data: data,
+                      onPendingChanged: (value) =>
+                          setState(() => pendingName = value),
+                      onChanged: (values) =>
+                          setState(() => data.addAll(values)),
+                    ),
+                    const SizedBox(height: AppTokens.section),
+                    ContactValuesGroup(
+                      initial: data['phones'] as List,
+                      email: false,
+                      onChanged: (values) =>
+                          setState(() => data['phones'] = values),
+                    ),
+                    const SizedBox(height: AppTokens.section),
+                    ContactValuesGroup(
+                      initial: data['emails'] as List,
+                      email: true,
+                      onChanged: (values) =>
+                          setState(() => data['emails'] = values),
+                    ),
+                    const SizedBox(height: AppTokens.section),
+                    AppGroup(
+                      alignment: AppAlignment.icon,
+                      children: [
+                        AppFieldRow(
+                          icon: CupertinoIcons.building_2_fill,
+                          child: AppInput(
+                            label: '公司',
+                            labelVisible: false,
+                            inline: true,
+                            initialValue: data['organization'],
+                            onChanged: (v) =>
+                                setState(() => data['organization'] = v),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppTokens.section),
+                    dates(),
+                    const SizedBox(height: AppTokens.section),
+                    AppGroup(
+                      alignment: AppAlignment.icon,
+                      children: [
+                        AppFieldRow(
+                          icon: CupertinoIcons.text_alignleft,
+                          child: AppInput(
+                            label: '备注',
+                            labelVisible: false,
+                            inline: true,
+                            minLines: 3,
+                            initialValue: data['notes'],
+                            onChanged: (v) => setState(() => data['notes'] = v),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        saving ? '正在保存到本机，请稍候。' : '保存到本机后，可在同步页面手动上传。',
+                        style: AppTheme.of(context).text.bodySmall,
                       ),
                     ),
-                  ),
-                field('display_name', '姓名', required: true),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: field('family_name', '姓')),
-                    const SizedBox(width: 12),
-                    Expanded(child: field('given_name', '名')),
                   ],
                 ),
-                const SizedBox(height: 16),
-                field('organization', '组织'),
-                values('phones', '电话', TextInputType.phone),
-                values('emails', '邮箱', TextInputType.emailAddress),
-                dates(),
-                section('备注'),
-                field('notes', '备注', lines: 5),
-                const SizedBox(height: 32),
-                Text(saving ? '正在保存到本机，请稍候。' : '保存到本机后，可在同步页面手动上传。'),
-              ],
+              ),
             ),
           ),
         ),

@@ -85,17 +85,18 @@ def exercise(binary, root, backend, endpoint=None):
     b = cli("b", "init", a["dataset"])
     c = cli("c", "init", a["dataset"])
     assert len({a["device"], b["device"], c["device"]}) == 3
-    data = {"version": 2, "display_name": "测试联系人 Élodie", "given_name": "Élodie", "family_name": "测试", "phones": [{"label": "mobile", "value": "+1 555 0100"}, {"label": "work", "value": "010-1234"}], "emails": [{"label": "work", "value": "fixture@example.invalid"}], "organization": "Example", "notes": "仅为合成样本", "dates": [{"kind": "birthday", "label": "生日", "calendar": "chinese_lunar", "year": None, "month": 2, "day": 29, "is_leap_month": True}, {"kind": "birthday", "label": "公历生日", "calendar": "gregorian", "year": 2024, "month": 2, "day": 29, "is_leap_month": False}]}
+    data = {"version": 2, "display_name": "测试联系人 Élodie", "given_name": "Élodie", "middle_name": "MiddleOnly", "family_name": "测试", "phones": [{"label": "mobile", "value": "+1 555 0100"}, {"label": "work", "value": "010-1234"}], "emails": [{"label": "work", "value": "fixture@example.invalid"}], "organization": "Example", "notes": "仅为合成样本", "dates": [{"kind": "birthday", "label": "生日", "calendar": "chinese_lunar", "year": None, "month": 2, "day": 29, "is_leap_month": True}, {"kind": "birthday", "label": "公历生日", "calendar": "gregorian", "year": 2024, "month": 2, "day": 29, "is_leap_month": False}]}
     source = write(root / "contact.json", data)
     contact = cli("a", "create", source)
     key = contact["id"]
     assert cli("a", "get", key)["contact"]["data"] == data
     assert cli("a", "info") == a
     assert len(cli("a", "list", "ÉLODIE")["contacts"]) == 1
+    assert len(cli("a", "list", "middleonly")["contacts"]) == 1
     assert len(cli("a", "list", "010-1234")["contacts"]) == 1
     assert cli("a", "list", "no-match")["contacts"] == []
     before = cli("a", "status")
-    for invalid in [dict(data, dates=[data["dates"][0], data["dates"][0]]), dict(data, dates=[dict(data["dates"][1], kind="unknown")]), dict(data, dates=[{k: v for k, v in data["dates"][0].items() if k != "kind"}]), dict(data, dates=[dict(data["dates"][0], kind="custom", label="")]), dict(data, dates=[dict(data["dates"][0], year=2024)]), dict(data, dates=[dict(data["dates"][0], year=2025, month=6, day=30)]), dict(data, dates=[dict(data["dates"][0], year=1900)]), dict(data, unexpected=True), dict(data, version=1), dict(data, display_name=""), dict(data, dates=[dict(data["dates"][1], year=2023)]), dict(data, notes="x" * 65537)]:
+    for invalid in [dict(data, middle_name="x" * 1025), dict(data, dates=[data["dates"][0], data["dates"][0]]), dict(data, dates=[dict(data["dates"][1], kind="unknown")]), dict(data, dates=[{k: v for k, v in data["dates"][0].items() if k != "kind"}]), dict(data, dates=[dict(data["dates"][0], kind="custom", label="")]), dict(data, dates=[dict(data["dates"][0], year=2024)]), dict(data, dates=[dict(data["dates"][0], year=2025, month=6, day=30)]), dict(data, dates=[dict(data["dates"][0], year=1900)]), dict(data, unexpected=True), dict(data, version=1), dict(data, display_name=""), dict(data, dates=[dict(data["dates"][1], year=2023)]), dict(data, notes="x" * 65537)]:
         cli("a", "update", key, write(root / "invalid.json", invalid), exits=(2,))
         assert cli("a", "status") == before
     other = cli("b", "create", source)

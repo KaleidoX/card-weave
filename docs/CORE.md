@@ -8,7 +8,9 @@ SQLite canonical STRICT 表 `contacts` 具有 `id`、`display_name`、`document`
 
 ## 联系人输入
 
-`version=2`、`display_name` 必填。`given_name`、`family_name`、`organization`、`notes` 默认空字符串；`phones`、`emails`、`dates` 默认空数组。电话/邮箱项为 `{label,value}`，保持原始文本，不格式化、不校验投递能力、不按电话合并联系人。
+`version=2`、`display_name` 必填。`given_name`、`middle_name`、`family_name`、`organization`、`notes` 默认空字符串；`phones`、`emails`、`dates` 默认空数组。电话/邮箱项为 `{label,value}`，保持原始文本，不格式化、不校验投递能力、不按电话合并联系人。
+
+中间名 `middle_name` 为可选字符串，与其他姓名字段使用相同长度限制并参与搜索。空中间名序列化时省略，避免改变既有文档的并发编辑比较；缺失时按空值读取。非空中间名会随完整联系人同步，参与同步的客户端须支持此字段；旧客户端按未知字段规则拒绝，不会静默丢弃。
 
 仅支持联系人格式 v2；不兼容或自动迁移旧联系人 v1，旧数据读取明确失败，不自动删除或重建。所有共享通讯录的客户端需使用 v2。身份文件和 SDK schema/protocol 版本不随联系人 document 版本改变。
 

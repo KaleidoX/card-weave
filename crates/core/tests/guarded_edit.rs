@@ -13,11 +13,20 @@ fn stale_edit_and_delete_preserve_newer_document_and_outbox() {
     ));
     let mut book = AddressBook::init(&path, None).unwrap();
     let original = ContactData::from_json(br#"{"version":2,"display_name":"Original","phones":[{"label":"work","value":"123"}],"dates":[{"kind":"birthday","label":"birthday","calendar":"chinese_lunar","year":null,"month":4,"day":15,"is_leap_month":true}]}"#).unwrap();
+    assert!(
+        !serde_json::to_value(&original)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("middle_name")
+    );
     let contact = book.create(original.clone()).unwrap();
     let mut newer = original.clone();
     newer.display_name = "Newer".into();
+    newer.middle_name = "MiddleOnly".into();
     book.save_guarded(&contact.id, &original, Some(newer.clone()))
         .unwrap();
+    assert_eq!(book.list("MiddleOnly", 10, 0).unwrap().len(), 1);
     let pending = book.status().unwrap().pending_outbox;
     for replacement in [Some(original.clone()), None] {
         assert_eq!(

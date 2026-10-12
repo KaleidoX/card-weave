@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:card_weave/main.dart';
 import 'package:card_weave/model.dart';
+import 'package:card_weave/contacts/date_format.dart';
 import 'package:card_weave/src/rust/frb_generated.dart';
 
 void main() {
@@ -13,7 +13,8 @@ void main() {
   ) async {
     await RustLib.init();
     final model = AppModel();
-    final name = 'Date fixture ${DateTime.now().microsecondsSinceEpoch}';
+    final given = 'Fixture${DateTime.now().microsecondsSinceEpoch}';
+    final name = '$given 明 张';
     await tester.pumpWidget(CardWeaveApp(model: model));
     Future<void> waitFor(bool Function() condition) async {
       for (var i = 0; i < 150; i++) {
@@ -27,7 +28,10 @@ void main() {
     }
 
     Future<void> tap(String label) async {
-      final f = find.text(label).last;
+      await tester.pumpAndSettle();
+      final f = ['新建联系人', '展开姓名细分', '收起姓名细分'].contains(label)
+          ? find.bySemanticsLabel(RegExp(label))
+          : find.text(label).last;
       await tester.ensureVisible(f);
       await tester.pumpAndSettle();
       await tester.tap(f);
@@ -43,22 +47,34 @@ void main() {
     String? id;
     try {
       await tap('新建联系人');
-      final field = find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == '姓名',
-      );
+      final field = find.byKey(const ValueKey('input-姓名'));
       await tester.enterText(field, name);
+      expect(find.byKey(const ValueKey('input-姓氏')), findsNothing);
+      expect(find.byKey(const ValueKey('input-名字')), findsNothing);
+      await tap('展开姓名细分');
+      await tester.enterText(find.byKey(const ValueKey('input-姓氏')), '张');
+      await tester.enterText(find.byKey(const ValueKey('input-名字')), given);
+      await tester.enterText(find.byKey(const ValueKey('input-中间名')), '明');
+      await tap('收起姓名细分');
+      expect(find.byKey(const ValueKey('input-姓氏')), findsNothing);
+      Future<void> pick(int wheel, int index) async {
+        final picker = find.byType(CupertinoPicker).at(wheel);
+        await tester.ensureVisible(picker);
+        tester
+            .widget<CupertinoPicker>(picker)
+            .scrollController!
+            .jumpToItem(index);
+        await tester.pumpAndSettle();
+      }
+
       await tap('添加日期');
-      await tap('确定');
+      await pick(1, 2);
+      await pick(2, 29);
       await tap('添加日期');
       expect(find.text('农历生日'), findsOneWidget);
-      await tester.ensureVisible(find.text('请选择'));
-      await tester.drag(find.text('请选择'), const Offset(0, -44));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('正月'));
-      await tester.drag(find.text('正月'), const Offset(0, -44));
-      await tester.pumpAndSettle();
-      await tap('确定');
-      await tap('保存');
+      await pick(1, 2);
+      await pick(2, 1);
+      await tap('完成');
       await waitFor(
         () => model.contacts.any((c) => c['data']['display_name'] == name),
       );
@@ -69,6 +85,10 @@ void main() {
               as String;
       final saved = (await model.get(id))!['data'];
       expect(saved['version'], 2);
+      expect(saved['display_name'], name);
+      expect(saved['family_name'], '张');
+      expect(saved['given_name'], given);
+      expect(saved['middle_name'], '明');
       expect(saved['dates'].length, 2);
       expect(saved['dates'][0]['kind'], 'birthday');
       expect(saved['dates'][0]['calendar'], 'gregorian');
@@ -76,18 +96,20 @@ void main() {
       expect(saved['dates'][1]['year'], null);
       expect(saved['dates'][1]['is_leap_month'], true);
       await tap(name);
-      await tester.tap(find.byTooltip('编辑联系人'));
+      await tester.tap(find.text('编辑'));
       await tester.pumpAndSettle();
-      await tap('公历生日 ▾');
-      await tester.tap(find.byTooltip('返回'));
+      await tap('2月29日');
+      await pick(2, 28);
+      await tester.tap(find.byKey(const ValueKey('cancel-contact')));
       await tester.pumpAndSettle();
       expect(find.text('放弃未保存的修改？'), findsOneWidget);
       await tap('继续编辑');
       await tap('公历生日');
       await tap('纪念日');
-      await tap('确定');
-      await tap('保存');
-      await waitFor(() => !model.loading);
+      await tap('完成');
+      await waitFor(
+        () => !model.loading && find.text('编辑').evaluate().isNotEmpty,
+      );
       await model.command('close');
       unwrap(
         await model.host.initialize(
@@ -96,35 +118,23 @@ void main() {
         ),
       );
       final reopened = (await model.get(id))!['data'];
+      expect(reopened['family_name'], '张');
+      expect(reopened['given_name'], given);
+      expect(reopened['middle_name'], '明');
       expect(reopened['dates'][0]['kind'], 'anniversary');
       expect(reopened['dates'][1], saved['dates'][1]);
-      await tester.tap(find.byTooltip('编辑联系人'));
+      await tester.tap(find.text('编辑'));
       await tester.pumpAndSettle();
-      await tap('农历生日 ▾');
+      await tap(dateText(Map<String, dynamic>.from(saved['dates'][1])));
       expect(find.text('闰月'), findsNothing);
-      await tap('不指定年份');
-      await waitFor(
-        () => find.byType(LinearProgressIndicator).evaluate().isEmpty,
-      );
-      final current = DateTime.now().year.clamp(1901, 2100);
-      for (var y = current; y != 2025; y += y > 2025 ? -1 : 1) {
-        await tester.ensureVisible(find.text('$y 年'));
-        await tester.drag(find.text('$y 年'), Offset(0, y > 2025 ? 44 : -44));
-        await tester.pumpAndSettle();
-      }
+      await pick(0, 2025 - 1901 + 1);
       expect(find.text('选择月份'), findsOneWidget);
-      for (var step = 0; step < 7; step++) {
-        final monthWheel = find.byType(CupertinoPicker).at(1);
-        await tester.ensureVisible(monthWheel);
-        await tester.drag(monthWheel, const Offset(0, -44));
-        await tester.pumpAndSettle();
-      }
-      await tester.ensureVisible(find.text('请选择'));
-      await tester.drag(find.text('请选择'), const Offset(0, -44));
-      await tester.pumpAndSettle();
-      await tap('确定');
-      await tap('保存');
-      await waitFor(() => !model.loading);
+      await pick(1, 7);
+      await pick(2, 1);
+      await tap('完成');
+      await waitFor(
+        () => !model.loading && find.text('编辑').evaluate().isNotEmpty,
+      );
       await model.command('close');
       unwrap(
         await model.host.initialize(

@@ -45,6 +45,8 @@ pub struct ContactData {
     pub display_name: String,
     #[serde(default)]
     pub given_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub middle_name: String,
     #[serde(default)]
     pub family_name: String,
     #[serde(default)]
@@ -82,7 +84,12 @@ impl ContactData {
             return Err(Error::Invalid("unsupported contact version"));
         }
         text(&self.display_name, 1024, true)?;
-        for name in [&self.given_name, &self.family_name, &self.organization] {
+        for name in [
+            &self.given_name,
+            &self.middle_name,
+            &self.family_name,
+            &self.organization,
+        ] {
             text(name, 1024, false)?;
         }
         text(&self.notes, 32768, false)?;

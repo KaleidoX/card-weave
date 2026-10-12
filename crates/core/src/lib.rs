@@ -329,6 +329,7 @@ impl AddressBook {
                 let found = [
                     &data.display_name,
                     &data.given_name,
+                    &data.middle_name,
                     &data.family_name,
                     &data.organization,
                     &data.notes,

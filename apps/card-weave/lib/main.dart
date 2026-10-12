@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import 'src/rust/frb_generated.dart';
 import 'model.dart';
 import 'editor.dart';
+import 'contacts/contact_content.dart';
 import 'settings.dart';
+import 'design.dart';
+import 'contacts/date_format.dart' show dateType, dateText;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,28 +21,18 @@ class CardWeaveApp extends StatelessWidget {
   final AppModel model;
   const CardWeaveApp({super.key, required this.model});
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => CupertinoApp(
     debugShowCheckedModeBanner: false,
     title: 'CardWeave',
-    theme: theme(Brightness.light),
-    darkTheme: theme(Brightness.dark),
+    builder: (context, child) {
+      final theme = AppTheme(MediaQuery.platformBrightnessOf(context));
+      return CupertinoTheme(
+        data: theme.cupertino,
+        child: DefaultTextStyle(style: theme.text.bodyLarge, child: child!),
+      );
+    },
     home: Home(model),
   );
-  ThemeData theme(Brightness brightness) => ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xff2855a8),
-      brightness: brightness,
-    ),
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
-    ),
-    appBarTheme: const AppBarTheme(centerTitle: false),
-  );
-}
-
-void notice(BuildContext context, String text) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 }
 
 class Home extends StatefulWidget {
@@ -51,6 +44,7 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
   int tab = 0;
+  String? savedMessage, syncError;
   Timer? debounce;
   final search = TextEditingController();
   AppModel get m => widget.model;
@@ -80,9 +74,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Future<void> openEditor() async {
     final saved = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => ContactEditor(m)),
+      CupertinoPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => ContactEditor(m),
+      ),
     );
-    if (saved == true && mounted) notice(context, '已保存到本机');
+    if (saved == true && mounted) setState(() => savedMessage = '已保存到本机');
   }
 
   @override
@@ -90,327 +87,270 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     listenable: m,
     builder: (context, _) {
       if (!m.ready) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const AppPage(body: AppLoadingState());
       }
       if (m.startupError != null) {
-        return Scaffold(
+        return AppPage(
           body: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(m.startupError!),
-                FilledButton(onPressed: m.start, child: const Text('重试')),
-              ],
+            child: AppStatus(
+              m.startupError!,
+              kind: AppStatusKind.error,
+              onRetry: m.start,
             ),
           ),
         );
       }
       if (!m.initialized) return Welcome(m);
-      final content = switch (tab) {
-        0 => contacts(),
-        1 => syncPage(),
-        _ => SettingsPage(m),
-      };
-      final destinations = const [
-        NavigationDestination(
-          icon: Icon(Icons.people_outline),
-          selectedIcon: Icon(Icons.people),
-          label: '通讯录',
-        ),
-        NavigationDestination(icon: Icon(Icons.sync), label: '同步'),
-        NavigationDestination(icon: Icon(Icons.settings_outlined), label: '设置'),
+      const destinations = [
+        AppTabItem(CupertinoIcons.person_2, '联系人'),
+        AppTabItem(CupertinoIcons.arrow_2_circlepath, '同步'),
+        AppTabItem(CupertinoIcons.gear, '设置'),
       ];
-      return LayoutBuilder(
-        builder: (context, size) => Scaffold(
-          appBar: AppBar(
-            title: Text(['通讯录', '同步', '设置'][tab]),
-            actions: [
-              if (tab == 0)
-                IconButton(
-                  tooltip: '刷新',
-                  onPressed: m.syncing ? null : () => m.refresh(),
-                  icon: const Icon(Icons.refresh),
-                ),
-            ],
+      return AppPage(
+        safeTop: false,
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppTokens.width),
+            child: IndexedStack(
+              index: tab,
+              children: [contacts(), syncPage(), SettingsPage(m)],
+            ),
           ),
-          body: Row(
-            children: [
-              if (size.maxWidth >= 700)
-                NavigationRail(
-                  selectedIndex: tab,
-                  onDestinationSelected: (v) => setState(() => tab = v),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.people_outline),
-                      label: Text('通讯录'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.sync),
-                      label: Text('同步'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      label: Text('设置'),
-                    ),
-                  ],
-                ),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 900),
-                    child: content,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          bottomNavigationBar: size.maxWidth < 700
-              ? NavigationBar(
-                  selectedIndex: tab,
-                  onDestinationSelected: (v) => setState(() => tab = v),
-                  destinations: destinations,
-                )
-              : null,
-          floatingActionButton: tab == 0
-              ? FloatingActionButton.extended(
-                  onPressed: openEditor,
-                  icon: const Icon(Icons.person_add_outlined),
-                  label: const Text('新建联系人'),
-                )
-              : null,
+        ),
+        bottomBar: AppTabs(
+          index: tab,
+          onChanged: (v) => setState(() => tab = v),
+          items: destinations,
         ),
       );
     },
   );
-  Widget conflictBanner() => Card(
-    color: Theme.of(context).colorScheme.tertiaryContainer,
-    child: ListTile(
-      leading: const Icon(Icons.difference_outlined),
+  Widget conflictBanner() => SurfaceBox(
+    child: AppRow(
+      leading: const Icon(CupertinoIcons.square_stack),
       title: Text('${m.conflicts.length} 位联系人需要处理冲突'),
       subtitle: const Text('多个版本会保留，直到你作出选择'),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: const Icon(CupertinoIcons.chevron_forward),
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ConflictList(m)),
+        CupertinoPageRoute(builder: (_) => ConflictList(m)),
       ),
     ),
   );
-  Widget contacts() => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: TextField(
-          controller: search,
-          decoration: InputDecoration(
-            hintText: '搜索姓名、电话、邮箱或备注',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: search.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: '清除搜索',
-                    onPressed: () {
-                      search.clear();
-                      m.search = '';
-                      m.load(reset: true);
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
-          ),
-          onChanged: (v) {
-            debounce?.cancel();
-            debounce = Timer(const Duration(milliseconds: 250), () {
-              m.search = v;
-              m.load(reset: true);
-            });
-          },
-        ),
-      ),
-      if (m.conflicts.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: conflictBanner(),
-        ),
-      if (m.listError != null && m.contacts.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
+  Widget contacts() => LargeTitlePage(
+    title: '联系人',
+    trailing: AppIconButton(
+      tooltip: '新建联系人',
+      onPressed: openEditor,
+      icon: const Icon(CupertinoIcons.add),
+    ),
+    slivers: [
+      CupertinoSliverRefreshControl(onRefresh: m.refresh),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: Text(m.listError!)),
-              TextButton(onPressed: () => m.load(), child: const Text('重新加载')),
+              AppSearchField(
+                controller: search,
+                onClear: () {
+                  debounce?.cancel();
+                  search.clear();
+                  m.search = '';
+                  m.load(reset: true);
+                },
+                onChanged: (v) {
+                  debounce?.cancel();
+                  debounce = Timer(const Duration(milliseconds: 250), () {
+                    m.search = v;
+                    m.load(reset: true);
+                  });
+                },
+              ),
+              if (m.conflicts.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: conflictBanner(),
+                ),
+              if (savedMessage != null)
+                AppStatus(savedMessage!, kind: AppStatusKind.success),
+              if (m.listError != null)
+                AppStatus(
+                  m.listError!,
+                  kind: AppStatusKind.error,
+                  onRetry: () => m.load(reset: true),
+                ),
             ],
           ),
         ),
-      if (m.syncing) const LinearProgressIndicator(),
-      Expanded(
-        child: m.contacts.isEmpty && !m.loading
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        m.listError != null
-                            ? Icons.error_outline
-                            : Icons.people_outline,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        m.listError ??
-                            (m.search.isEmpty ? '你的联系人，从这里开始' : '没有找到匹配的联系人'),
-                        style: Theme.of(context).textTheme.titleLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        m.search.isEmpty ? '离线也能记录，准备好后再同步。' : '试试其他姓名或联系方式。',
-                      ),
-                      if (m.listError != null)
-                        TextButton(
-                          onPressed: () => m.load(reset: true),
-                          child: const Text('重新加载'),
+      ),
+      if (m.contacts.isEmpty && !m.loading)
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppEmptyState(
+            m.search.isEmpty ? '还没有联系人' : '没有找到匹配的联系人',
+            message: m.search.isEmpty ? '轻点右上角 ＋ 添加第一位联系人。' : '试试其他姓名或联系方式。',
+          ),
+        ),
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList.builder(
+          itemCount: m.contacts.length,
+          itemBuilder: (context, i) {
+            final contact = m.contacts[i], data = object(contact['data']);
+            final phones = data['phones'] as List,
+                emails = data['emails'] as List;
+            final name = data['display_name'] as String;
+            final subtitle = phones.isNotEmpty
+                ? phones.first['value'] as String
+                : emails.isNotEmpty
+                ? emails.first['value'] as String
+                : data['organization'] as String;
+            return AppListItem(
+              first: i == 0,
+              last: i == m.contacts.length - 1,
+              alignment: AppAlignment.avatar,
+              child: AppRow(
+                leading: ContactAvatar(name),
+                title: Text(name, style: AppTheme.of(context).text.titleMedium),
+                subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                trailing: contact['has_conflict'] == true
+                    ? Semantics(
+                        label: '有待处理冲突',
+                        child: Icon(
+                          CupertinoIcons.exclamationmark_triangle,
+                          size: 20,
                         ),
-                    ],
+                      )
+                    : null,
+                onTap: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => ContactDetail(m, contact['id']),
                   ),
                 ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.only(bottom: 100),
-                itemCount: m.contacts.length + 1,
-                itemBuilder: (c, i) {
-                  if (i == m.contacts.length) {
-                    return Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Center(
-                        child: m.loading
-                            ? const CircularProgressIndicator()
-                            : m.more
-                            ? TextButton(
-                                onPressed: () => m.load(),
-                                child: const Text('加载更多'),
-                              )
-                            : Text(m.contacts.isEmpty ? '' : '已显示全部匹配联系人'),
-                      ),
-                    );
-                  }
-                  final contact = m.contacts[i], data = object(contact['data']);
-                  final phones = data['phones'] as List;
-                  final emails = data['emails'] as List;
-                  final name = data['display_name'] as String;
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    leading: CircleAvatar(child: Text(name.characters.first)),
-                    title: Text(name),
-                    subtitle: Text(
-                      phones.isNotEmpty
-                          ? phones.first['value']
-                          : emails.isNotEmpty
-                          ? emails.first['value']
-                          : data['organization'] as String,
-                    ),
-                    trailing: contact['has_conflict'] == true
-                        ? const Tooltip(
-                            message: '有待处理冲突',
-                            child: Icon(Icons.warning_amber),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ContactDetail(m, contact['id']),
-                      ),
-                    ),
-                  );
-                },
               ),
+            );
+          },
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: AppTokens.pagePadding,
+          child: Center(
+            child: m.loading
+                ? const CupertinoActivityIndicator()
+                : m.more
+                ? AppButton(
+                    onPressed: () => m.load(),
+                    child: const Text('加载更多'),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
       ),
     ],
   );
-  Widget syncPage() => ListView(
-    padding: const EdgeInsets.all(20),
+  Widget syncPage() => GroupedPageList(
+    title: '同步',
     children: [
-      Icon(
-        m.syncing ? Icons.sync : Icons.cloud_outlined,
-        size: 64,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-      const SizedBox(height: 20),
-      Text(
-        m.syncing ? (m.cancelling ? '正在取消同步' : '正在同步') : '由你决定何时同步',
-        style: Theme.of(context).textTheme.headlineSmall,
-        textAlign: TextAlign.center,
-      ),
-      const SizedBox(height: 12),
-      const Text('更改先保存在本机。同步会上传本机更改并获取其他设备的版本。', textAlign: TextAlign.center),
-      const SizedBox(height: 24),
-      Card(
-        child: Column(
-          children: [
-            ListTile(
-              title: const Text('待上传更改'),
-              trailing: Text('${m.status['pending_outbox'] ?? 0}'),
+      const SectionLabel('当前状态'),
+      AppGroup(
+        children: [
+          AppRow(
+            title: const Text('待上传更改'),
+            trailing: Text('${m.status['pending_outbox'] ?? 0} 项'),
+          ),
+          AppRow(
+            title: const Text('待处理冲突'),
+            trailing: Text('${m.status['conflict_count'] ?? 0} 位联系人 ›'),
+            onTap: () => Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => ConflictList(m)),
             ),
-            ListTile(
-              title: const Text('待处理冲突'),
-              trailing: Text('${m.status['conflict_count'] ?? 0}'),
-            ),
-            ListTile(
-              title: const Text('同步位置'),
-              subtitle: Text(m.config['endpoint'] as String? ?? '尚未配置'),
+          ),
+          if (m.lastSync != null) ...[
+            AppRow(
+              title: const Text('最近完成扫描'),
+              subtitle: Text(
+                m.lastSync!.replaceFirst('T', ' ').split('.').first,
+              ),
             ),
           ],
+        ],
+      ),
+      if (m.status['protocol_healthy'] == false) ...[
+        const SizedBox(height: 16),
+        const AppStatus(
+          '部分远端数据尚未处理完成。请重试同步；若持续失败，请检查远端数据与服务。',
+          kind: AppStatusKind.warning,
+        ),
+      ],
+      if (m.conflicts.isNotEmpty) ...[
+        const SectionLabel('需要你的选择'),
+        conflictBanner(),
+      ],
+      if (m.syncMessage != null) ...[
+        const SectionLabel('本轮同步结果'),
+        AppStatus(m.syncMessage!, kind: AppStatusKind.success),
+      ],
+      const SizedBox(height: 24),
+      SurfaceBox(
+        child: AppRow(
+          leading: m.syncing ? const CupertinoActivityIndicator() : null,
+          title: Text(
+            m.syncing
+                ? (m.cancelling ? '正在取消同步' : '取消同步')
+                : m.config.isEmpty
+                ? '配置同步位置'
+                : '立即同步',
+            style: TextStyle(color: AppTheme.of(context).colors.primary),
+          ),
+          onTap: m.cancelling
+              ? null
+              : () async {
+                  if (m.syncing) {
+                    m.cancel();
+                    return;
+                  }
+                  if (m.config.isEmpty) {
+                    setState(() => tab = 2);
+                    return;
+                  }
+                  setState(() => syncError = null);
+                  try {
+                    await m.synchronize();
+                  } catch (e) {
+                    if (mounted) setState(() => syncError = message(e));
+                  }
+                },
         ),
       ),
-      if (m.lastSync != null)
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(
-            '最近完成扫描：${m.lastSync!.replaceFirst("T", " ").split(".").first}',
+      if (syncError != null) AppStatus(syncError!, kind: AppStatusKind.error),
+      const SectionLabel('同步位置'),
+      AppGroup(
+        children: [
+          AppRow(
+            leading: const Icon(CupertinoIcons.cloud),
+            title: Text(
+              m.config.isEmpty
+                  ? '尚未配置'
+                  : m.config['type'] == 's3'
+                  ? 'S3 兼容存储'
+                  : 'WebDAV',
+            ),
+            subtitle: const Text('连接设置与账号'),
+            trailing: const Icon(CupertinoIcons.chevron_forward),
+            onTap: () => setState(() => tab = 2),
           ),
-        ),
-      if (m.status['protocol_healthy'] == false)
-        const Padding(
-          padding: EdgeInsets.all(12),
-          child: Text('部分远端数据尚未处理完成。请重试同步；若持续失败，请检查远端数据与服务。'),
-        ),
-      if (m.conflicts.isNotEmpty) conflictBanner(),
-      if (m.syncMessage != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Text(m.syncMessage!),
-        ),
+        ],
+      ),
       const SizedBox(height: 16),
-      if (m.syncing) ...[
-        const LinearProgressIndicator(),
-        const SizedBox(height: 16),
-        OutlinedButton(
-          onPressed: m.cancelling ? null : m.cancel,
-          child: const Text('取消同步'),
-        ),
-      ] else
-        FilledButton.icon(
-          onPressed: () async {
-            if (m.config.isEmpty) {
-              setState(() => tab = 2);
-              return;
-            }
-            try {
-              await m.synchronize();
-            } catch (e) {
-              if (mounted) notice(context, message(e));
-            }
-          },
-          icon: const Icon(Icons.sync),
-          label: Text(m.config.isEmpty ? '配置同步位置' : '立即同步'),
-        ),
-      const SizedBox(height: 16),
-      const Text('本轮结果只描述当前同步；并发修改会作为冲突保留。'),
+      Text(
+        '本轮结果只描述当前同步；并发修改会作为冲突保留。',
+        style: AppTheme.of(context).text.bodySmall,
+      ),
     ],
   );
 }
@@ -441,19 +381,20 @@ class _WelcomeState extends State<Welcome> {
       Map<String, dynamic>? info;
       if (joining) {
         info = object(jsonDecode(join.text));
-        final ok = await showDialog<bool>(
+        final ok = await showCupertinoDialog<bool>(
           context: context,
-          builder: (c) => AlertDialog(
+          builder: (c) => AppDialog(
             title: const Text('加入这个通讯录？'),
             content: Text(
               '通讯录：${info!['dataset']}\n同步位置：${info['backend']?['endpoint'] ?? '稍后设置'}\n\n加入信息不包含访问凭据。此设备会创建自己的身份。',
             ),
             actions: [
-              TextButton(
+              CupertinoDialogAction(
                 onPressed: () => Navigator.pop(c, false),
                 child: const Text('返回'),
               ),
-              FilledButton(
+              CupertinoDialogAction(
+                isDefaultAction: true,
                 onPressed: () => Navigator.pop(c, true),
                 child: const Text('确认加入'),
               ),
@@ -471,25 +412,25 @@ class _WelcomeState extends State<Welcome> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => AppPage(
     body: SafeArea(
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 540),
+          constraints: const BoxConstraints(maxWidth: AppTokens.width),
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.all(28),
+            padding: AppTokens.pagePadding,
             children: [
               Icon(
-                Icons.contacts_outlined,
+                CupertinoIcons.person_2,
                 size: 76,
-                color: Theme.of(context).colorScheme.primary,
+                color: AppTheme.of(context).colors.primary,
               ),
               const SizedBox(height: 24),
               Text(
                 'CardWeave',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineLarge,
+                style: AppTheme.of(context).text.headlineLarge,
               ),
               const SizedBox(height: 12),
               const Text(
@@ -497,28 +438,22 @@ class _WelcomeState extends State<Welcome> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 36),
-              if (error != null)
-                Text(
-                  error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              FilledButton(
+              if (error != null) AppStatus(error!, kind: AppStatusKind.error),
+              AppButton.filled(
                 onPressed: busy ? null : () => create(false),
                 child: Text(busy ? '正在准备…' : '创建本地通讯录'),
               ),
               const SizedBox(height: 28),
-              ExpansionTile(
+              AppDisclosure(
                 title: const Text('已有通讯录？加入现有通讯录'),
                 children: [
-                  TextField(
+                  AppInput(
                     controller: join,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: '粘贴另一台设备的加入信息',
-                    ),
+                    label: '粘贴另一台设备的加入信息',
+                    minLines: 3,
                   ),
                   const SizedBox(height: 12),
-                  OutlinedButton(
+                  AppButton(
                     onPressed: busy ? null : () => create(true),
                     child: const Text('检查并加入'),
                   ),
@@ -561,75 +496,78 @@ class _ContactDetailState extends State<ContactDetail> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('联系人详情'),
+  Widget build(BuildContext context) => AppPage(
+    navigationBar: AppNavigation(
+      title: const Text(''),
       actions: [
         if (contact != null)
-          IconButton(
-            tooltip: '编辑联系人',
-            icon: const Icon(Icons.edit_outlined),
+          AppButton(
             onPressed: contact!['has_conflict'] == true
                 ? null
                 : () async {
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      CupertinoPageRoute(
+                        fullscreenDialog: true,
                         builder: (_) =>
                             ContactEditor(widget.model, original: contact),
                       ),
                     );
                     await load();
                   },
+            child: const Text('编辑'),
           ),
       ],
     ),
     body: loading
-        ? const Center(child: CircularProgressIndicator())
+        ? const AppLoadingState()
         : Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
+              constraints: const BoxConstraints(maxWidth: AppTokens.width),
               child: ListView(
-                padding: const EdgeInsets.all(20),
+                padding: AppTokens.pagePadding,
                 children: [
-                  if (error != null) Text(error!),
+                  if (error != null)
+                    AppStatus(error!, kind: AppStatusKind.error),
                   if (contact == null)
-                    const Text('联系人已不存在。')
+                    const AppEmptyState('联系人已不存在。')
                   else ...[
                     if (contact!['has_conflict'] == true)
-                      Card(
-                        child: ListTile(
+                      SurfaceBox(
+                        child: AppRow(
                           title: const Text('此联系人有多个版本'),
                           subtitle: const Text('请先处理冲突，再编辑或删除。'),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: const Icon(CupertinoIcons.chevron_forward),
                           onTap: () => Navigator.push(
                             context,
-                            MaterialPageRoute(
+                            CupertinoPageRoute(
                               builder: (_) => ConflictList(widget.model),
                             ),
                           ).then((_) => load()),
                         ),
                       ),
-                    ContactContent(object(contact!['data'])),
+                    ContactContent(object(contact!['data']), showHero: true),
                     const SizedBox(height: 24),
-                    OutlinedButton.icon(
+                    AppButton.icon(
                       onPressed: contact!['has_conflict'] == true
                           ? null
                           : () async {
-                              final ok = await showDialog<bool>(
+                              final ok = await showCupertinoDialog<bool>(
                                 context: context,
-                                builder: (c) => AlertDialog(
+                                builder: (c) => AppDialog(
                                   title: const Text('删除联系人？'),
                                   content: const Text(
                                     '删除先保存在本机，下次同步后传递到其他设备。并发编辑仍可能形成冲突。',
                                   ),
                                   actions: [
-                                    TextButton(
+                                    CupertinoDialogAction(
                                       onPressed: () => Navigator.pop(c, false),
                                       child: const Text('取消'),
                                     ),
-                                    FilledButton(
+                                    CupertinoDialogAction(
+                                      isDefaultAction: true,
                                       onPressed: () => Navigator.pop(c, true),
+                                      isDestructiveAction: true,
                                       child: const Text('确认删除'),
                                     ),
                                   ],
@@ -646,8 +584,13 @@ class _ContactDetailState extends State<ContactDetail> {
                                 }
                               }
                             },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('删除联系人'),
+                      icon: const Icon(CupertinoIcons.trash),
+                      label: Text(
+                        '删除联系人',
+                        style: TextStyle(
+                          color: AppTheme.of(context).colors.error,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -663,34 +606,44 @@ class ConflictList extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: model,
-    builder: (context, _) => Scaffold(
-      appBar: AppBar(title: const Text('处理冲突')),
+    builder: (context, _) => AppPage(
+      navigationBar: AppNavigation(title: const Text('处理冲突')),
       body: model.conflicts.isEmpty
-          ? const Center(child: Text('没有待处理的冲突'))
+          ? const AppEmptyState('没有待处理的冲突')
           : ListView(
               children: [
                 const Padding(
-                  padding: EdgeInsets.all(20),
+                  padding: AppTokens.pagePadding,
                   child: Text('同一联系人在不同设备上被修改。请选择保留的完整版本，或编辑合并结果。'),
                 ),
                 ...model.conflicts.map((conflict) {
                   final candidates = conflict['candidates'] as List;
                   final named = candidates.where((c) => c['contact'] != null);
-                  return ListTile(
-                    leading: const Icon(Icons.difference_outlined),
-                    title: Text(
-                      named.isEmpty
-                          ? '已删除联系人'
-                          : named.first['contact']['data']['display_name'],
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppTokens.page,
+                      0,
+                      AppTokens.page,
+                      AppTokens.section,
                     ),
-                    subtitle: Text(
-                      '${candidates.length} 个候选版本${candidates.any((c) => c['contact'] == null) ? ' · 含删除版本' : ''}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ConflictPage(model, copy(conflict)),
+                    child: SurfaceBox(
+                      child: AppRow(
+                        leading: const Icon(CupertinoIcons.square_stack),
+                        title: Text(
+                          named.isEmpty
+                              ? '已删除联系人'
+                              : named.first['contact']['data']['display_name'],
+                        ),
+                        subtitle: Text(
+                          '${candidates.length} 个候选版本${candidates.any((c) => c['contact'] == null) ? ' · 含删除版本' : ''}',
+                        ),
+                        trailing: const Icon(CupertinoIcons.chevron_forward),
+                        onTap: () => Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (_) => ConflictPage(model, copy(conflict)),
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -715,61 +668,99 @@ class _ConflictPageState extends State<ConflictPage> {
   @override
   Widget build(BuildContext context) {
     final candidates = widget.conflict['candidates'] as List;
-    final keys = emptyContact().keys;
+    final keys = emptyContact().keys.where((key) => key != 'version');
     final differences = {
       for (final k in keys)
-        if (candidates
-                .map((c) => jsonEncode(c['contact']?['data']?[k]))
-                .toSet()
-                .length >
-            1)
+        if (candidates.any((c) {
+              final value = c['contact']?['data']?[k];
+              return value != null &&
+                  value != '' &&
+                  (value is! List || value.isNotEmpty);
+            }) &&
+            candidates
+                    .map((c) => jsonEncode(c['contact']?['data']?[k]))
+                    .toSet()
+                    .length >
+                1)
           k,
     };
-    return Scaffold(
-      appBar: AppBar(title: const Text('选择最终版本')),
+    return AppPage(
+      navigationBar: AppNavigation(title: const Text('选择最终版本')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppTokens.pagePadding,
         children: [
-          const Text('高亮字段在版本间不同。选择会覆盖你当前看到的这些候选；之后到达的新版本仍会保留。'),
-          if (error != null) Text(error!),
+          const Text('下面列出不同的字段。请选择保留的完整版本，也可以查看完整资料或编辑合并。之后到达的新版本仍会保留。'),
+          if (error != null) AppStatus(error!, kind: AppStatusKind.error),
           for (var i = 0; i < candidates.length; i++)
-            Card(
-              margin: const EdgeInsets.symmetric(vertical: 12),
+            SurfaceBox(
+              margin: const EdgeInsets.symmetric(
+                vertical: AppTokens.section / 2,
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppTokens.pagePadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       '版本 ${i + 1}',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: AppTheme.of(context).text.titleLarge,
                     ),
                     Text(
                       '设备 ${candidates[i]['version']['device'].toString().substring(0, 8)}',
+                      style: AppTheme.of(context).text.bodySmall,
                     ),
                     const SizedBox(height: 16),
                     if (candidates[i]['contact'] == null)
-                      const ListTile(
-                        leading: Icon(Icons.delete_outline),
+                      const AppRow(
+                        leading: Icon(CupertinoIcons.trash),
                         title: Text('删除版本'),
                         subtitle: Text('保留此版本将删除联系人。'),
                       )
-                    else
-                      ContactContent(
-                        object(candidates[i]['contact']['data']),
-                        differences: differences,
+                    else ...[
+                      for (final field in differences)
+                        AppInfoRow(
+                          changed: true,
+                          label:
+                              (const {
+                                'display_name': '姓名',
+                                'given_name': '名字',
+                                'middle_name': '中间名',
+                                'family_name': '姓氏',
+                                'organization': '公司',
+                                'phones': '电话',
+                                'emails': '邮箱',
+                                'dates': '重要日期',
+                                'notes': '备注',
+                              }[field] ??
+                              field),
+                          value: (conflictValue(
+                            object(candidates[i]['contact']['data']),
+                            field,
+                          )),
+                        ),
+                      AppDisclosure(
+                        title: const Text('查看完整版本'),
+                        children: [
+                          ContactContent(
+                            object(candidates[i]['contact']['data']),
+                            differences: differences,
+                            grouped: false,
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 12),
+                    ],
                     Wrap(
                       spacing: 12,
                       children: [
-                        FilledButton(
+                        AppButton(
                           onPressed: saving
                               ? null
                               : () async {
                                   final chosen = candidates[i]['contact'];
-                                  final ok = await showDialog<bool>(
+                                  final ok = await showCupertinoDialog<bool>(
                                     context: context,
-                                    builder: (c) => AlertDialog(
+                                    builder: (c) => AppDialog(
                                       title: Text(
                                         chosen == null
                                             ? '确认采用删除版本？'
@@ -779,12 +770,13 @@ class _ConflictPageState extends State<ConflictPage> {
                                         '结果先保存在本机，需要再次同步到其他设备。',
                                       ),
                                       actions: [
-                                        TextButton(
+                                        CupertinoDialogAction(
                                           onPressed: () =>
                                               Navigator.pop(c, false),
                                           child: const Text('取消'),
                                         ),
-                                        FilledButton(
+                                        CupertinoDialogAction(
+                                          isDefaultAction: true,
                                           onPressed: () =>
                                               Navigator.pop(c, true),
                                           child: const Text('确认采用'),
@@ -817,13 +809,14 @@ class _ConflictPageState extends State<ConflictPage> {
                           ),
                         ),
                         if (candidates[i]['contact'] != null)
-                          OutlinedButton(
+                          AppButton(
                             onPressed: saving
                                 ? null
                                 : () async {
                                     final saved = await Navigator.push<bool>(
                                       context,
-                                      MaterialPageRoute(
+                                      CupertinoPageRoute(
+                                        fullscreenDialog: true,
                                         builder: (_) => ContactEditor(
                                           widget.model,
                                           seed: object(
@@ -849,4 +842,21 @@ class _ConflictPageState extends State<ConflictPage> {
       ),
     );
   }
+}
+
+String conflictValue(Map<String, dynamic> data, String field) {
+  final value = data[field];
+  if (field == 'dates') {
+    return (value as List).isEmpty
+        ? '未填写'
+        : value
+              .map((d) => '${dateType(object(d))}  ${dateText(object(d))}')
+              .join('\n');
+  }
+  if (value is List) {
+    return value.isEmpty
+        ? '未填写'
+        : value.map((v) => '${v['label']}  ${v['value']}'.trim()).join('\n');
+  }
+  return value == null || value == '' ? '未填写' : value.toString();
 }
