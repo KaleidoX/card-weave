@@ -1,3 +1,4 @@
+mod directory;
 use card_weave_core::{
     AddressBook, Calendar, Cancellation, ContactData, Error, GroupCommand, Resolution,
     calendar_date, calendar_options,
@@ -17,6 +18,11 @@ use std::{
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    Directory {
+        group: Option<String>,
+        revision: Option<u64>,
+        offset: usize,
+    },
     ValidateContact {
         contact: ContactData,
     },
@@ -146,6 +152,7 @@ fn reply(result: Result<Value, Error>) -> String {
 
 pub struct Host {
     book: Mutex<Option<AddressBook>>,
+    directory: Mutex<directory::DirectoryState>,
     cancellation: Mutex<Option<Cancellation>>,
     syncing: AtomicBool,
     runtime: tokio::runtime::Runtime,
@@ -154,6 +161,7 @@ impl Host {
     pub fn new() -> Self {
         Self {
             book: Mutex::new(None),
+            directory: Mutex::new(directory::DirectoryState::default()),
             cancellation: Mutex::new(None),
             syncing: AtomicBool::new(false),
             runtime: tokio::runtime::Runtime::new().expect("async runtime"),
@@ -224,7 +232,35 @@ impl Host {
                 .lock()
                 .map_err(|_| Error::Invalid("host unavailable"))?;
             let book = state.as_mut().ok_or(Error::Invalid("not open"))?;
+            let mut directory = self
+                .directory
+                .lock()
+                .map_err(|_| Error::Invalid("host unavailable"))?;
+            if matches!(
+                &command,
+                Command::Create { .. }
+                    | Command::Save { .. }
+                    | Command::Delete { .. }
+                    | Command::Resolve { .. }
+                    | Command::Close
+                    | Command::Migrate { .. }
+                    | Command::Groups {
+                        request: GroupCommand::Create { .. }
+                            | GroupCommand::Rename { .. }
+                            | GroupCommand::Delete { .. }
+                            | GroupCommand::SetMembers { .. }
+                            | GroupCommand::SetContactGroups { .. }
+                            | GroupCommand::Resolve { .. }
+                    }
+            ) {
+                directory.invalidate();
+            }
             match command {
+                Command::Directory {
+                    group,
+                    revision,
+                    offset,
+                } => directory.page(book, group, revision, offset),
                 Command::RelationViews { contact } => encode(book.relation_views(&contact)?),
                 Command::Groups { request } => encode(book.groups(request)?),
                 Command::Migrate { destination } => {
@@ -287,6 +323,10 @@ impl Host {
                 .lock()
                 .map_err(|_| Error::Invalid("host unavailable"))?;
             let book = state.as_mut().ok_or(Error::Invalid("not open"))?;
+            self.directory
+                .lock()
+                .map_err(|_| Error::Invalid("host unavailable"))?
+                .invalidate();
             encode(self.runtime.block_on(book.sync(&transport, &token))?)
         })();
         if let Ok(mut token) = self.cancellation.lock() {

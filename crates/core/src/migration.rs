@@ -26,6 +26,7 @@ impl AddressBook {
                 break;
             }
         }
+        target.prepare_name_index()?;
         let config = target.config.clone();
         target.close()?;
         let sdk = Sdk::open(
@@ -37,7 +38,9 @@ impl AddressBook {
         let mut verified = Self {
             sdk,
             config: config.clone(),
+            name_index: name_index::NameIndex::default(),
         };
+        verified.prepare_name_index()?;
         let mut offset = 0;
         loop {
             let page = self.list("", 64, offset)?;

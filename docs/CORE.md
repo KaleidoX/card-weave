@@ -70,3 +70,9 @@ Fs/WebDAV/S3 由 lfs-storage 构造，dataset 命名空间由 SDK 处理。Fs �
 依赖使用有界历表，限定在其支持的 1901–2100 农历年；代表月份和日数以香港天文台历表验证，并不声称提供范围外的天文计算。界面不提供已有日期的公农历转换，也不包含系统生日写入或提醒策略；新增日期的今日换算见下文。
 
 应用宿主 `calendar_date` 命令接受 `{calendar, year, month, day}`，输入为设备本地公历日期，返回目标历法 `{year, month, day, is_leap_month}`，无需打开通讯录。Flutter 每次添加日期时传入设备本地今天，Rust 使用相同农历库换算，不读取宿主 UTC 日期；无效公历或超出农历范围返回错误，不伪造默认值。现有日期及手动选择不指定年份保持原值。
+
+## 通讯录浏览索引
+
+应用宿主 `directory` 命令接受 `{group, revision, offset}`。`revision: null` 创建当前列表的轻量快照，返回 `{revision, sections, total, offset, entries}`；后续请求带该 revision，每页最多 50 条。entries 只有 id、display_name、subtitle、has_conflict；完整文档仍通过 get 读取。sections 返回 initial、offset、count，支持未加载页面的直接定位。写入、冲突解决、群组变更、迁移、关闭及同步使快照失效；过期分页返回 edit_stale，界面重新读取。该快照只供浏览，不是编辑基线。
+
+拼音由 Rust 的 pinyin 0.11.0 生成，优先使用手工填写的 phonetic 姓名字段，否则转换 display_name。A–Z 按字母排列，数字及其他字符归入最后的 #；默认读音无法覆盖全部多音姓氏，可用手工拼音指定。排序键不覆盖联系人字段，也不改变同步格式。姓名索引属于 AddressBook 会话内存：打开通讯录时补建，在 create/update/save_guarded/resolve 的成功写入后更新；同步后核对已应用的数据，仅为新增或姓名输入变化的记录转换，删除及关闭时清理。目录查询只读取排序键，不执行拼音转换。重启会重新补建；没有新增 SQLite 连接或持久化缓存文件。

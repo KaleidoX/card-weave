@@ -15,3 +15,5 @@ Android 界面使用 Flutter/Dart、flutter_rust_bridge 2.13.0、flutter_secure_
 - [chinese-lunisolar-calendar](https://github.com/magiclen/chinese-lunisolar-calendar) 0.2.5：MIT，Rust 核心农历月份与日数计算。关闭默认 features（不启用时钟/时区功能）；支持农历年 1901–2100。传递依赖包括 chrono、year-helper、chinese-variant、enum-ordinalize，精确版本见两份 Cargo.lock，许可遵循各包随附声明。Flutter 通过现有 JSON 桥接使用核心结果，无独立 Dart 农历库。
 
 - cupertino_icons 1.0.9：MIT，Flutter 官方 Cupertino 控件的图标字体（包含导航返回箭头）。精确版本与校验值见 apps/card-weave/pubspec.lock，保留包内 LICENSE。
+
+- [pinyin](https://github.com/mozillazg/rust-pinyin) 0.11.0：MIT，联系人姓名排序使用的中文转拼音库。关闭默认 features，仅启用 plain；不启用多音字候选和声调输出。精确版本见根目录与移动端 Cargo.lock。

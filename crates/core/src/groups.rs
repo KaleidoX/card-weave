@@ -85,7 +85,66 @@ fn group_row(id: &str, name: &str) -> Vec<Value> {
         Value::Text(json!({"version":1,"name":name}).to_string()),
     ]
 }
+pub(crate) struct ContactGroupFilter {
+    group: Option<String>,
+    joined: BTreeMap<String, BTreeSet<String>>,
+    pending: BTreeSet<String>,
+}
+impl ContactGroupFilter {
+    pub(crate) fn matches(&self, id: &str, conflict: bool) -> bool {
+        match &self.group {
+            None => true,
+            Some(g) if g.is_empty() => !self.joined.contains_key(id) && !self.pending.contains(id),
+            Some(g) => !conflict && self.joined.get(id).is_some_and(|groups| groups.contains(g)),
+        }
+    }
+}
 impl AddressBook {
+    pub(crate) fn contact_group_filter(
+        &mut self,
+        group: Option<&str>,
+    ) -> Result<ContactGroupFilter> {
+        if group.is_none() {
+            return Ok(ContactGroupFilter {
+                group: None,
+                joined: BTreeMap::new(),
+                pending: BTreeSet::new(),
+            });
+        }
+        if let Some(g) = group
+            && !g.is_empty()
+        {
+            self.available_group(g)?;
+        }
+        let conflicts = self.sdk.list_conflicts()?;
+        let available = self
+            .group_rows()?
+            .into_iter()
+            .filter(|r| !conflicts.iter().any(|c| c.table == 2 && c.key == r[0]))
+            .map(|r| r[0].clone())
+            .collect::<BTreeSet<_>>();
+        let mut joined = BTreeMap::<String, BTreeSet<String>>::new();
+        let mut pending = BTreeSet::new();
+        for m in self.membership_rows()? {
+            if conflicts.iter().any(|c| c.table == 2 && c.key == m[1]) {
+                pending.insert(m[2].clone());
+                continue;
+            }
+            if !available.contains(&m[1]) {
+                continue;
+            }
+            if conflicts.iter().any(|c| c.table == 3 && c.key == m[0]) {
+                pending.insert(m[2].clone());
+            } else if m[3] == "joined" {
+                joined.entry(m[2].clone()).or_default().insert(m[1].clone());
+            }
+        }
+        Ok(ContactGroupFilter {
+            group: group.map(str::to_owned),
+            joined,
+            pending,
+        })
+    }
     fn require_groups(&self) -> Result<()> {
         if self.config.version != 2 {
             return Err(Error::Invalid("upgrade address book first"));
@@ -328,49 +387,14 @@ impl AddressBook {
                 search,
                 offset,
             } => {
-                if let Some(g) = &group
-                    && !g.is_empty()
-                {
-                    self.available_group(g)?;
-                }
-                let conflicts = self.sdk.list_conflicts()?;
-                let available = self
-                    .group_rows()?
-                    .into_iter()
-                    .filter(|r| !conflicts.iter().any(|c| c.table == 2 && c.key == r[0]))
-                    .map(|r| r[0].clone())
-                    .collect::<BTreeSet<_>>();
-                let mut joined = BTreeMap::<String, BTreeSet<String>>::new();
-                let mut pending = BTreeSet::new();
-                for m in self.membership_rows()? {
-                    if conflicts.iter().any(|c| c.table == 2 && c.key == m[1]) {
-                        pending.insert(m[2].clone());
-                        continue;
-                    }
-                    if !available.contains(&m[1]) {
-                        continue;
-                    }
-                    if conflicts.iter().any(|c| c.table == 3 && c.key == m[0]) {
-                        pending.insert(m[2].clone());
-                    } else if m[3] == "joined" {
-                        joined.entry(m[2].clone()).or_default().insert(m[1].clone());
-                    }
-                }
+                let filter = self.contact_group_filter(group.as_deref())?;
                 let mut result = Vec::new();
                 let mut skip = offset;
                 for page in 0..201 {
                     let contacts = self.list(&search, 500, page * 500)?;
                     let done = contacts.len() < 500;
                     for c in contacts {
-                        let matches = match &group {
-                            None => true,
-                            Some(g) if g.is_empty() => {
-                                !joined.contains_key(&c.id) && !pending.contains(&c.id)
-                            }
-                            Some(g) => {
-                                !c.has_conflict && joined.get(&c.id).is_some_and(|s| s.contains(g))
-                            }
-                        };
+                        let matches = filter.matches(&c.id, c.has_conflict);
                         if matches {
                             if skip > 0 {
                                 skip -= 1;

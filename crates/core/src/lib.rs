@@ -1,3 +1,6 @@
+mod directory;
+mod name_index;
+pub use directory::{ContactDirectory, DirectoryEntry, DirectorySection};
 pub mod backend;
 mod calendar;
 pub use calendar::{CalendarDate, CalendarMonth, CalendarOptions, calendar_date, calendar_options};
@@ -265,6 +268,7 @@ pub struct SyncOutcome {
 }
 
 pub struct AddressBook {
+    name_index: name_index::NameIndex,
     sdk: Sdk,
     config: Config,
 }
@@ -306,7 +310,15 @@ impl AddressBook {
                 .open(home.join("identity.json"))?;
             file.write_all(&serde_json::to_vec_pretty(&config)?)?;
             file.sync_all()?;
-            Ok(Self { sdk, config })
+            {
+                let mut book = Self {
+                    sdk,
+                    config,
+                    name_index: name_index::NameIndex::default(),
+                };
+                book.prepare_name_index()?;
+                Ok(book)
+            }
         })();
         if result.is_err() {
             let _ = fs::remove_dir_all(home);
@@ -331,7 +343,15 @@ impl AddressBook {
             schema(config.version),
             Baseline::Reject,
         )?;
-        Ok(Self { sdk, config })
+        {
+            let mut book = Self {
+                sdk,
+                config,
+                name_index: name_index::NameIndex::default(),
+            };
+            book.prepare_name_index()?;
+            Ok(book)
+        }
     }
     fn validate_relations(&mut self, id: &str, data: &ContactData) -> Result<()> {
         let previous = self.get(id)?.map(|c| c.data.relations).unwrap_or_default();
@@ -385,6 +405,7 @@ impl AddressBook {
         let values = row(&id, &data)?;
         self.sdk
             .write_transaction(|w| w.execute("INSERT INTO contacts VALUES (?1,?2,?3)", &values))?;
+        self.name_index.prepare(&id, &data);
         Ok(Contact {
             id,
             data,
@@ -509,6 +530,7 @@ impl AddressBook {
                 &values,
             )
         })?;
+        self.name_index.prepare(id, &data);
         self.get(id)?.ok_or(Error::NotFound)
     }
     pub fn delete(&mut self, id: &str) -> Result<()> {
@@ -519,6 +541,7 @@ impl AddressBook {
                 &[Value::Text(id.into())],
             )
         })?;
+        self.name_index.remove(id);
         Ok(())
     }
     /// Atomically compares the observed full document before replacing or deleting it.
@@ -565,6 +588,10 @@ impl AddressBook {
         if !changed {
             return Err(Error::EditStale);
         }
+        match &replacement {
+            Some(data) => self.name_index.prepare(id, data),
+            None => self.name_index.remove(id),
+        }
         self.get(id)
     }
 
@@ -610,6 +637,10 @@ impl AddressBook {
             .map(|data| row(id, data))
             .transpose()?;
         self.sdk.resolve(1, id, parents, row)?;
+        match self.get(id)? {
+            Some(contact) => self.name_index.prepare(id, &contact.data),
+            None => self.name_index.remove(id),
+        }
         Ok(())
     }
     pub fn status(&mut self) -> Result<SyncStatus> {
@@ -639,7 +670,10 @@ impl AddressBook {
         let report = self
             .sdk
             .sync_once(transport, cancellation, SyncLimits::default())
-            .await?;
+            .await;
+        let indexed = self.prepare_name_index();
+        let report = report?;
+        indexed?;
         let mut status = self.status()?;
         status.settled &= report.complete_scan;
         Ok(SyncOutcome {
@@ -651,6 +685,7 @@ impl AddressBook {
     }
     pub fn close(&mut self) -> Result<()> {
         self.sdk.close()?;
+        self.name_index = name_index::NameIndex::default();
         Ok(())
     }
 }
