@@ -96,12 +96,14 @@ void main() {
       await pick(2, 1);
       await tap('完成');
       await waitFor(
-        () => model.contacts.any((c) => c['data']['display_name'] == name),
+        () => model.contactPages.values
+            .expand((page) => page)
+            .any((c) => c['display_name'] == name),
       );
       id =
-          model.contacts.firstWhere(
-                (c) => c['data']['display_name'] == name,
-              )['id']
+          model.contactPages.values
+                  .expand((page) => page)
+                  .firstWhere((c) => c['display_name'] == name)['id']
               as String;
       final saved = (await model.get(id))!['data'];
       expect(saved['version'], 2);

@@ -123,3 +123,11 @@ WebDAV 设置将服务地址与同步目录分开填写。坚果云服务地址�
 隔离 Android 验证入口为 `integration_test/system_contacts_test.dart`。只能在专用测试设备中准备包含 `Fixture` 名称、电话 `+1 202-555-0199`、邮箱 `cw-import@example.invalid`、公历生日 `--02-29` 及 `vnd.fixture/contact` 扩展行（DATA1=`Vendor fixture`）的合成 Provider 联系人并以 `CARDWEAVE_ACCEPTANCE=1`、正确 `CARDWEAVE_ABI` 运行；普通用户手机只安装默认应用包，由用户在页面授权和选择真实联系人。
 
 日期策略的原生回归入口为 `integration_test/realme_dates_test.dart`，使用合成编码验证真实 Rust 转换与保存重开，不读取系统通讯录。仅在隔离 Android 测试应用中运行。
+
+## 联系人浏览与搜索
+
+联系人首页顶部提供搜索按钮，点击进入独立搜索页；搜索框固定在顶部，结果继续按需分页，返回时保留首页滚动位置。搜索限定在进入时选定的通讯录列表或群组。
+
+首页按姓名拼音/英文字母显示分组，右侧显示当前列表实际存在的字母和 #，支持点击及沿索引滑动。完整分组计数用于计算锚点位置，点击末尾字母无需先加载前面的所有联系人。Flutter 使用 SliverVariedExtentList.builder 按需构建行，联系人摘要每页 50 条，最多保留 10 页；行高随系统字号调整。姓名索引由 Rust 在会话打开及数据写入边界维护，详情文档不进入列表缓存；算法及快照失效规则见核心文档。
+
+底部导航采用 24 点图标、11 点标签，继续使用 CupertinoTabBar 和鼠尾草配色。

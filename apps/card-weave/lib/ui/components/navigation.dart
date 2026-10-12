@@ -143,6 +143,7 @@ class AppTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) => CupertinoTabBar(
     currentIndex: index,
+    iconSize: AppTokens.tabIcon,
     onTap: onChanged,
     items: [
       for (final item in items)

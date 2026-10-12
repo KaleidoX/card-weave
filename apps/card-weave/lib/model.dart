@@ -1,3 +1,5 @@
+import 'contacts/directory_data.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -116,7 +118,7 @@ void validateBackend(Map<String, dynamic> value) {
 }
 
 class AppModel extends ChangeNotifier {
-  final AppHost host = AppHost();
+  late final AppHost host = AppHost();
   final FlutterSecureStorage secure = const FlutterSecureStorage();
   late Directory directory;
   bool ready = false,
@@ -125,7 +127,6 @@ class AppModel extends ChangeNotifier {
       cancelling = false,
       loading = false;
   String? startupError, listError, syncMessage, lastSync;
-  String search = '';
   String? group;
   String groupTitle = '联系人';
   String bookName = 'book';
@@ -134,12 +135,17 @@ class AppModel extends ChangeNotifier {
   Future<dynamic> groups(Map<String, dynamic> request) =>
       command('groups', {'request': request});
   int generation = 0;
-  List<Map<String, dynamic>> contacts = [], conflicts = [];
+  List<Map<String, dynamic>> conflicts = [];
+  List<ContactSection> contactSections = [];
+  int contactTotal = 0;
+  int? directoryRevision;
+  final Map<int, List<Map<String, dynamic>>> contactPages = {};
+  final Set<int> pendingContactPages = {};
+  final Map<int, String> contactPageErrors = {};
   Map<String, dynamic> identity = {},
       status = {},
       config = {},
       credentials = {};
-  bool more = false;
   Future<dynamic> command(
     String action, [
     Map<String, dynamic> args = const {},
@@ -294,39 +300,88 @@ class AppModel extends ChangeNotifier {
   Future<void> load({bool reset = false}) async {
     if (!reset && loading) return;
     final ticket = ++generation;
-    if (reset) {
-      contacts = [];
-      more = false;
-    }
     loading = true;
     listError = null;
+    directoryRevision = null;
+    contactPages.clear();
+    pendingContactPages.clear();
+    contactPageErrors.clear();
+    contactSections = [];
+    contactTotal = 0;
     notifyListeners();
     try {
-      final result = supportsGroups
-          ? await groups({
-              'operation': 'contacts',
-              'group': group,
-              'search': search,
-              'offset': contacts.length,
-            })
-          : await command('list', {
-              'search': search,
-              'offset': contacts.length,
-            });
-      final page = (result as List).map(object).toList();
-      if (ticket != generation) {
-        return;
-      }
-      final seen = contacts.map((c) => c['id']).toSet();
-      contacts.addAll(page.where((c) => seen.add(c['id'])));
-      more = page.length == 50;
+      final result = object(
+        await command('directory', {
+          'group': group,
+          'revision': null,
+          'offset': 0,
+        }),
+      );
+      if (ticket != generation) return;
+      directoryRevision = result['revision'] as int;
+      contactTotal = result['total'] as int;
+      contactSections = (result['sections'] as List)
+          .map((s) => ContactSection.fromJson(object(s)))
+          .toList();
+      contactPages[0] = (result['entries'] as List).map(object).toList();
     } catch (e) {
-      if (ticket == generation) {
-        listError = message(e);
-      }
+      if (ticket == generation) listError = message(e);
     }
     if (ticket == generation) {
       loading = false;
+      notifyListeners();
+    }
+  }
+
+  Map<String, dynamic>? contactAt(int index) {
+    final page = contactPages[index ~/ 50 * 50];
+    if (page == null || index % 50 >= page.length) return null;
+    return page[index % 50];
+  }
+
+  Future<void> loadContactPage(int index, {bool retry = false}) async {
+    final offset = index ~/ 50 * 50;
+    if (loading ||
+        directoryRevision == null ||
+        index < 0 ||
+        index >= contactTotal ||
+        contactPages.containsKey(offset) ||
+        pendingContactPages.contains(offset) ||
+        (!retry && contactPageErrors.containsKey(offset))) {
+      return;
+    }
+    final ticket = generation;
+    pendingContactPages.add(offset);
+    contactPageErrors.remove(offset);
+    notifyListeners();
+    try {
+      final result = object(
+        await command('directory', {
+          'group': group,
+          'revision': directoryRevision,
+          'offset': offset,
+        }),
+      );
+      if (ticket != generation) return;
+      contactPages[offset] = (result['entries'] as List).map(object).toList();
+      // Keep a bounded window of summaries; SQLite owns the full documents.
+      while (contactPages.length > 10) {
+        final farthest = contactPages.keys.reduce(
+          (a, b) => (a - offset).abs() > (b - offset).abs() ? a : b,
+        );
+        contactPages.remove(farthest);
+      }
+    } catch (e) {
+      if (ticket == generation) {
+        if (e is AppFailure && e.code == 'edit_stale') {
+          await load(reset: true);
+          return;
+        }
+        contactPageErrors[offset] = message(e);
+      }
+    }
+    if (ticket == generation) {
+      pendingContactPages.remove(offset);
       notifyListeners();
     }
   }

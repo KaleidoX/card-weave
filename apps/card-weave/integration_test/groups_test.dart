@@ -76,7 +76,7 @@ void main() {
       await t.pumpAndSettle();
       await tap('Friends fixture');
       await t.pumpAndSettle();
-      expect(m.contacts.length, 2);
+      expect(m.contactTotal, 2);
       await tap('Alpha fixture');
       await tap('群组');
       await tap('Friends fixture');

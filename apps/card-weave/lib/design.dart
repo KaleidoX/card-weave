@@ -15,3 +15,4 @@ export 'ui/components/selection_row.dart';
 export 'ui/components/selection_page.dart';
 export 'ui/components/sections.dart';
 export 'ui/components/pagination.dart';
+export 'ui/components/alphabet_index.dart';

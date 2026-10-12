@@ -125,15 +125,18 @@ class AppSearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+  final bool autofocus;
   const AppSearchField({
     super.key,
     required this.controller,
     required this.onChanged,
     required this.onClear,
+    this.autofocus = false,
   });
   @override
   Widget build(BuildContext context) => CupertinoSearchTextField(
     controller: controller,
+    autofocus: autofocus,
     placeholder: '搜索',
     onChanged: onChanged,
     onSuffixTap: onClear,

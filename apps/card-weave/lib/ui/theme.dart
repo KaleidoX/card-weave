@@ -67,6 +67,11 @@ class AppTheme {
     textTheme: CupertinoTextThemeData(
       primaryColor: colors.primary,
       textStyle: text.bodyLarge,
+      tabLabelTextStyle: TextStyle(
+        fontSize: AppTokens.tabLabel,
+        fontWeight: FontWeight.w500,
+        color: colors.onSurfaceVariant,
+      ),
       actionTextStyle: text.bodyLarge.copyWith(color: colors.primary),
       navTitleTextStyle: text.titleMedium,
       navLargeTitleTextStyle: text.headlineLarge,

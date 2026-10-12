@@ -50,7 +50,7 @@ void main() {
       const reopen = bool.fromEnvironment('REOPEN');
       if (reopen) {
         await waitFor(() => model.initialized && !model.loading);
-        expect(model.contacts.single['data']['display_name'], '最终联系人');
+        expect(model.contactAt(0)!['display_name'], '最终联系人');
         expect(model.config['endpoint'], 'https://127.0.0.1:18941');
         expect(model.credentials['password'], 'synthetic-test-only');
         await tap('同步');
@@ -76,36 +76,31 @@ void main() {
         tester.widget<CupertinoPicker>(day).scrollController!.jumpToItem(1);
         await tester.pumpAndSettle();
         await tap('完成');
-        await waitFor(() => model.contacts.length == 2);
-        final lunar = model.contacts
-            .firstWhere(
-              (c) => c['data']['display_name'] == '待删除的验证联系人',
-            )['data']['dates']
-            .single;
+        await waitFor(() => model.contactTotal == 2);
+        final imported = (await model.command('list', {
+          'search': '待删除的验证联系人',
+          'offset': 0,
+        }) as List).single;
+        final lunar = imported['data']['dates'].single;
         expect(lunar['calendar'], 'chinese_lunar');
         expect(lunar['year'], isNull);
         expect(lunar['is_leap_month'], true);
+        await tap('搜索联系人');
         final search = find.byWidgetPredicate(
           (w) => w is CupertinoTextField && w.placeholder == '搜索',
         );
         await tester.enterText(search, '待删除');
         await tester.pump(const Duration(milliseconds: 400));
-        await waitFor(() => !model.loading && model.contacts.length == 1);
+        await waitFor(() => find.text('待删除的验证联系人').evaluate().isNotEmpty);
         await tap('待删除的验证联系人');
         await tap('删除联系人');
         await tap('确认删除');
-        await waitFor(() => model.contacts.isEmpty);
-        await tester.tap(
-          find
-              .descendant(
-                of: find.byType(CupertinoSearchTextField),
-                matching: find.byType(CupertinoButton),
-              )
-              .last,
-        );
+        await waitFor(() => model.contactTotal == 1);
         await tester.pumpAndSettle();
-        await waitFor(() => model.contacts.length == 1);
-        expect(model.contacts.single['data']['display_name'], '最终联系人');
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        await waitFor(() => model.contactTotal == 1);
+        expect(model.contactAt(0)!['display_name'], '最终联系人');
         expect(tester.takeException(), isNull);
         return;
       }
@@ -133,12 +128,9 @@ void main() {
           .jumpToItem(1);
       await tester.pumpAndSettle();
       await tap('完成');
-      await waitFor(() => model.contacts.length == 1);
-      expect(
-        model.contacts.single['data']['phones'][0]['value'],
-        '13800138000',
-      );
-      final id = model.contacts.single['id'] as String;
+      await waitFor(() => model.contactTotal == 1);
+      expect(model.contactAt(0)!['subtitle'], '13800138000');
+      final id = model.contactAt(0)!['id'] as String;
       await tap('设置');
       await enter('服务地址', 'https://127.0.0.1:18941');
       await enter('用户名', 'm0-fixture');
@@ -218,9 +210,7 @@ void main() {
       await tester.pumpAndSettle();
       await enter('姓名', '最终联系人');
       await tap('完成');
-      await waitFor(
-        () => model.contacts.single['data']['display_name'] == '最终联系人',
-      );
+      await waitFor(() => model.contactAt(0)!['display_name'] == '最终联系人');
       await tester.pageBack();
       await tester.pumpAndSettle();
       second = object(await command('get', {'id': id}));

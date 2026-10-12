@@ -93,13 +93,15 @@ void main() {
         await enter('备注', 'Multiline\nFixture');
         await tap('完成');
         await waitFor(
-          () => m.contacts.any(
-            (c) => c['data']['display_name'] == 'Dr Alex Jordan Taylor Jr',
-          ),
+          () => m.contactPages.values
+              .expand((page) => page)
+              .any((c) => c['display_name'] == 'Dr Alex Jordan Taylor Jr'),
         );
-        id = m.contacts.firstWhere(
-          (c) => c['data']['display_name'] == 'Dr Alex Jordan Taylor Jr',
-        )['id'];
+        id = m.contactPages.values
+            .expand((page) => page)
+            .firstWhere(
+              (c) => c['display_name'] == 'Dr Alex Jordan Taylor Jr',
+            )['id'];
         final saved = object((await m.get(id!))!['data']);
         expect(saved['name_prefix'], 'Dr');
         expect(saved['name_suffix'], 'Jr');
@@ -143,6 +145,7 @@ void main() {
         expect((await m.get(id))!['data'], {...saved}..remove('website'));
         await t.pageBack();
         await t.pumpAndSettle();
+        await tap('搜索联系人');
         for (final text in [
           'NicknameFixture',
           'Designer',
@@ -154,8 +157,10 @@ void main() {
         ]) {
           await t.enterText(find.byType(CupertinoSearchTextField), text);
           await t.pump(const Duration(milliseconds: 400));
-          await waitFor(() => !m.loading);
-          expect(m.contacts.map((c) => c['id']), contains(id));
+          await waitFor(
+            () => find.text('Dr Alex Jordan Taylor Jr').evaluate().isNotEmpty,
+          );
+          expect(find.text('Dr Alex Jordan Taylor Jr'), findsOneWidget);
         }
         expect(t.takeException(), isNull);
       } finally {

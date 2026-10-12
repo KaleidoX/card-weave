@@ -12,6 +12,8 @@ abstract final class AppTokens {
   static const notes = 88.0;
   static const touch = 44.0;
   static const icon = 24.0;
+  static const tabIcon = 24.0;
+  static const tabLabel = 11.0;
   static const actionIcon = 20.0;
   static const chevron = 12.0;
   static const labelGap = 6.0;
