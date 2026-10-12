@@ -37,12 +37,9 @@ class _CalendarWheelsState extends State<CalendarWheels> {
     (m) => m['month'] == d['month'] && m['is_leap_month'] == d['is_leap_month'],
   );
   int get maxDay => monthIndex < 0 ? 0 : months[monthIndex]['days'] as int;
-  bool get validDay =>
-      !loading &&
-      !failed &&
-      d['day'] != null &&
-      d['day'] >= 1 &&
-      d['day'] <= maxDay;
+  bool get validDay => !loading && !failed && hasValidDay;
+  bool get hasValidDay =>
+      d['day'] != null && d['day'] >= 1 && d['day'] <= maxDay;
   bool get validYear =>
       d['year'] == null ||
       (limits != null &&
@@ -254,14 +251,15 @@ class _CalendarWheelsState extends State<CalendarWheels> {
                 : '无法获取日历，请重试。',
           ),
           AppButton(onPressed: load, child: const Text('重试')),
-        ] else if (!loading && !validDay)
-          const AppStatus('请选择有效月份和日期'),
-        if (lunar)
-          Text(
-            d['year'] == null
-                ? '未指定年份：保留普通月或闰月及月日，尚未校验具体年份。'
-                : '月份和日数按所选农历年份计算。',
-          ),
+        ],
+        Visibility(
+          visible: !failed && !hasValidDay,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: const AppStatus('请选择有效月份和日期'),
+        ),
+        if (lunar) const Text('月份和日数按农历计算；不指定年份时保留月日及闰月信息，不校验具体年份。'),
       ],
     );
   }

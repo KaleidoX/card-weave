@@ -180,15 +180,33 @@ void main() {
         'is_leap_month': true,
       };
       List<dynamic>? result;
-      await open(t, [original], (v) => result = v);
+      final pending = Completer<Map<String, dynamic>>();
+      await open(
+        t,
+        [original],
+        (v) => result = v,
+        options: (c, y) => y == 2023 ? pending.future : fixtureOptions(c, y),
+      );
       await tap(t, '2025年闰六月廿九');
       expect(find.text('闰月'), findsNothing);
+      final help = find.text('月份和日数按农历计算；不指定年份时保留月日及闰月信息，不校验具体年份。');
+      final helpTop = t.getTopLeft(help).dy;
       await t.drag(find.text('2025'), const Offset(0, 44));
       await t.pumpAndSettle();
       expect(find.text('选择月份'), findsOneWidget);
       expect(find.text('请选择有效月份和日期'), findsOneWidget);
       expect(result!.single, original);
       expect(original['is_leap_month'], true);
+      expect(t.getTopLeft(help).dy, helpTop);
+      t
+          .widget<CupertinoPicker>(find.byType(CupertinoPicker).first)
+          .onSelectedItemChanged!(2023 - 1901 + 1);
+      await t.pump(const Duration(milliseconds: 150));
+      expect(find.text('请选择有效月份和日期').hitTestable(), findsOneWidget);
+      expect(t.getTopLeft(help).dy, helpTop);
+      pending.complete(await fixtureOptions('chinese_lunar', 2023));
+      await t.pumpAndSettle();
+      expect(t.getTopLeft(help).dy, helpTop);
     },
   );
 
