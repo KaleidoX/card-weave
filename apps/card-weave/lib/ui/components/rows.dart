@@ -140,26 +140,61 @@ class AppFieldRow extends StatelessWidget {
                           minHeight: AppTokens.row,
                         ),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (label != null) ...[
+                            if (label != null)
                               SizedBox(
                                 width: labelWidth,
+                                height: AppTokens.row,
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: label,
                                 ),
                               ),
-                              Container(
-                                width:
-                                    1 / MediaQuery.devicePixelRatioOf(context),
-                                height: AppTokens.actionIcon,
-                                color: AppTheme.of(context)
-                                    .colors
-                                    .outlineVariant,
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      minHeight: AppTokens.row,
+                                    ),
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        left: label == null
+                                            ? 0
+                                            : AppTokens.small,
+                                      ),
+                                      child: child,
+                                    ),
+                                  ),
+                                  if (label != null)
+                                    Positioned(
+                                      left: 0,
+                                      top:
+                                          (AppTokens.row -
+                                              AppTokens.actionIcon) /
+                                          2,
+                                      bottom:
+                                          (AppTokens.row -
+                                              AppTokens.actionIcon) /
+                                          2,
+                                      width:
+                                          1 /
+                                          MediaQuery.devicePixelRatioOf(
+                                            context,
+                                          ),
+                                      child: ColoredBox(
+                                        key: const ValueKey(
+                                          'field-label-divider',
+                                        ),
+                                        color: AppTheme.of(context)
+                                            .colors
+                                            .outlineVariant,
+                                      ),
+                                    ),
+                                ],
                               ),
-                              const SizedBox(width: AppTokens.small),
-                            ],
-                            Expanded(child: child),
+                            ),
                           ],
                         ),
                       ),

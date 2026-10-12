@@ -13,6 +13,7 @@ class AppInput extends StatelessWidget {
   final bool obscureText;
   final bool labelVisible;
   final int minLines;
+  final bool multiline;
   final bool inline;
   final FocusNode? focusNode;
   const AppInput({
@@ -26,6 +27,7 @@ class AppInput extends StatelessWidget {
     this.obscureText = false,
     this.labelVisible = true,
     this.minLines = 1,
+    this.multiline = false,
     this.inline = false,
     this.focusNode,
   });
@@ -38,16 +40,25 @@ class AppInput extends StatelessWidget {
               label.length > 6 ||
               MediaQuery.textScalerOf(context).scale(16) > 22 ||
               constraints.maxWidth < 260);
+      final textStyle = AppTheme.of(context).text.bodyLarge;
+      final lineHeight =
+          MediaQuery.textScalerOf(context).scale(textStyle.fontSize!) *
+          textStyle.height!;
+      // CupertinoTextFormFieldRow keeps 7 points of inner text-field padding.
+      final inlinePadding = ((AppTokens.row - lineHeight) / 2 - 7).clamp(
+        0.0,
+        double.infinity,
+      );
       final input = Semantics(
         label: label,
         child: CupertinoTextFormFieldRow(
           key: ValueKey('input-$label'),
           initialValue: initialValue,
           focusNode: focusNode,
-          textInputAction: minLines > 1
+          textInputAction: minLines > 1 || multiline
               ? TextInputAction.newline
               : TextInputAction.next,
-          onFieldSubmitted: minLines > 1
+          onFieldSubmitted: minLines > 1 || multiline
               ? null
               : (_) => FocusScope.of(context).nextFocus(),
           controller: controller,
@@ -65,7 +76,7 @@ class AppInput extends StatelessWidget {
                 )
               : null,
           padding: inline
-              ? const EdgeInsets.symmetric(vertical: AppTokens.tiny)
+              ? EdgeInsets.symmetric(vertical: inlinePadding)
               : AppTokens.rowPadding,
           placeholder: labelVisible ? null : label,
           style: AppTheme.of(context).text.bodyLarge,
@@ -74,7 +85,7 @@ class AppInput extends StatelessWidget {
           autovalidateMode: AutovalidateMode.onUserInteraction,
           keyboardType: keyboardType,
           minLines: minLines,
-          maxLines: minLines > 1 ? null : 1,
+          maxLines: minLines > 1 || multiline ? null : 1,
           obscureText: obscureText,
           enableSuggestions: !obscureText,
           autocorrect: false,

@@ -79,8 +79,7 @@ class _ContactSelectorState extends State<ContactSelector> {
     title: widget.selected == null ? '选择联系人' : '已选 ${selected.length} 位',
     busy: busy,
     onDone: widget.onSave == null ? null : save,
-    body: ListView(
-      padding: AppTokens.pagePadding,
+    body: AppSectionScrollView(
       children: [
         AppSearchField(
           controller: search,

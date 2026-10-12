@@ -133,10 +133,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
             ),
-          const SectionLabel('远端连接'),
-          const SizedBox(height: 8),
-          const Text('使用你自己的 HTTPS WebDAV 或 S3 兼容存储。所有设备需使用同一通讯录加入信息与同步位置。'),
-          const SizedBox(height: 24),
+          AppSection(
+            title: '远端连接',
+            child: const Text(
+              '使用你自己的 HTTPS WebDAV 或 S3 兼容存储。所有设备需使用同一通讯录加入信息与同步位置。',
+            ),
+          ),
           AppGroup(
             children: [
               AppRow(
@@ -168,13 +170,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
           if (type == 'webdav')
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                '坚果云服务地址：https://dav.jianguoyun.com/dav/\n同步目录如 CardWeave，支持多级目录，首次同步自动创建；留空使用服务根目录。',
-              ),
+            const Text(
+              '坚果云服务地址：https://dav.jianguoyun.com/dav/\n同步目录如 CardWeave，支持多级目录，首次同步自动创建；留空使用服务根目录。',
             ),
-          const SizedBox(height: 16),
           AppGroup(
             children: [
               AppSwitchRow(
@@ -187,7 +185,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
           if (error != null) AppStatus(error!, kind: AppStatusKind.error),
           SurfaceBox(
             child: AppButton(
@@ -197,11 +194,12 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (feedback != null)
             AppStatus(feedback!, kind: AppStatusKind.success),
-          const SizedBox(height: 32),
-          const SectionLabel('连接另一台设备'),
-          const SizedBox(height: 8),
-          const Text('在新设备首次启动时粘贴加入信息，然后单独填写访问凭据。加入信息不包含密码，也不授予存储访问权限。'),
-          const SizedBox(height: 12),
+          AppSection(
+            title: '连接另一台设备',
+            child: const Text(
+              '在新设备首次启动时粘贴加入信息，然后单独填写访问凭据。加入信息不包含密码，也不授予存储访问权限。',
+            ),
+          ),
           AppButton.icon(
             onPressed: () async {
               await Clipboard.setData(
@@ -212,7 +210,6 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: const Icon(CupertinoIcons.doc_on_doc),
             label: const Text('复制加入信息'),
           ),
-          const SizedBox(height: 16),
           AppGroup(
             children: [
               AppDisclosure(
@@ -221,14 +218,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   AppSelectableText(
                     '通讯录：${widget.model.identity['dataset']}\n设备：${widget.model.identity['device']}',
                   ),
-                  const SizedBox(height: 16),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 24),
           const Text('CardWeave 0.1.0 · Android 开发版\n外观与字号跟随系统。'),
-          const SizedBox(height: 24),
         ],
       ),
     ),

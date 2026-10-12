@@ -27,12 +27,9 @@ class ContactContent extends StatelessWidget {
       value: value,
       changed: differences.contains(key),
     );
-    Widget section(String title, List<Widget> rows) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionLabel(title),
-        if (grouped) AppGroup(children: rows) else ...rows,
-      ],
+    Widget section(String title, List<Widget> rows) => AppSection(
+      title: title,
+      child: grouped ? AppGroup(children: rows) : Column(children: rows),
     );
     List<Widget> scalarRows(List<String> keys) => [
       for (final key in keys)
@@ -55,19 +52,21 @@ class ContactContent extends StatelessWidget {
     final website = scalarRows(['website']);
     final notes = scalarRows(['notes']);
     final dates = data['dates'] as List;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AppSectionList(
       children: [
-        if (showHero) ...[
-          const SizedBox(height: AppTokens.small),
-          Center(child: ContactAvatar(name, large: true)),
-          const SizedBox(height: AppTokens.gap),
-          Text(
-            name,
-            textAlign: TextAlign.center,
-            style: AppTheme.of(context).text.headlineSmall,
+        if (showHero)
+          Column(
+            children: [
+              const SizedBox(height: AppTokens.small),
+              Center(child: ContactAvatar(name, large: true)),
+              const SizedBox(height: AppTokens.gap),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                style: AppTheme.of(context).text.headlineSmall,
+              ),
+            ],
           ),
-        ],
         if (basic.isNotEmpty) section('基本信息', basic),
         if (phonetic.isNotEmpty) section('姓名拼音', phonetic),
         if (employment.isNotEmpty) section('工作信息', employment),

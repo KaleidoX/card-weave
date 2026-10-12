@@ -121,8 +121,7 @@ class _GroupListsState extends State<GroupLists> {
         AppButton(onPressed: busy ? null : create, child: const Text('新建群组')),
       ],
     ),
-    body: ListView(
-      padding: AppTokens.pagePadding,
+    body: AppSectionScrollView(
       children: [
         if (error != null) AppStatus(error!, kind: AppStatusKind.error),
         if (error != null) AppButton(onPressed: load, child: const Text('重试')),
@@ -137,28 +136,36 @@ class _GroupListsState extends State<GroupLists> {
               AppRow(title: const Text('未分组'), onTap: () => select('', '未分组')),
             ],
           ),
-        const SectionLabel('群组'),
-        if (!loading && rows.isEmpty) const AppEmptyState('尚未创建群组'),
-        AppGroup(
-          children: [
-            for (final g in rows)
-              AppRow(
-                title: Text(g['name'] as String),
-                subtitle: Text(
-                  '${g['count']} 位联系人${g['pending'] == 0 ? '' : ' · ${g['pending']} 项待确认'}${g['duplicate'] == true ? ' · 名称重复' : ''}${g['has_conflict'] == true ? ' · 群组冲突' : ''}',
+        AppSection(
+          title: '群组',
+          child: !loading && rows.isEmpty
+              ? const AppEmptyState('尚未创建群组')
+              : AppGroup(
+                  children: [
+                    for (final g in rows)
+                      AppRow(
+                        title: Text(g['name'] as String),
+                        subtitle: Text(
+                          '${g['count']} 位联系人${g['pending'] == 0 ? '' : ' · ${g['pending']} 项待确认'}${g['duplicate'] == true ? ' · 名称重复' : ''}${g['has_conflict'] == true ? ' · 群组冲突' : ''}',
+                        ),
+                        onTap: g['has_conflict'] == true
+                            ? null
+                            : () => widget.selectFilter
+                                  ? select(
+                                      g['id'] as String,
+                                      g['name'] as String,
+                                    )
+                                  : manage(g),
+                        trailing: AppIconButton(
+                          tooltip: '管理群组',
+                          icon: const Icon(CupertinoIcons.ellipsis_circle),
+                          onPressed: g['has_conflict'] == true
+                              ? null
+                              : () => manage(g),
+                        ),
+                      ),
+                  ],
                 ),
-                onTap: g['has_conflict'] == true
-                    ? null
-                    : () => widget.selectFilter
-                          ? select(g['id'] as String, g['name'] as String)
-                          : manage(g),
-                trailing: AppIconButton(
-                  tooltip: '管理群组',
-                  icon: const Icon(CupertinoIcons.ellipsis_circle),
-                  onPressed: g['has_conflict'] == true ? null : () => manage(g),
-                ),
-              ),
-          ],
         ),
       ],
     ),
@@ -317,8 +324,7 @@ class _GroupDetailState extends State<GroupDetail> {
   @override
   Widget build(BuildContext context) => AppPage(
     navigationBar: AppNavigation(title: Text(name)),
-    body: ListView(
-      padding: AppTokens.pagePadding,
+    body: AppSectionScrollView(
       children: [
         if (error != null) AppStatus(error!, kind: AppStatusKind.error),
         AppGroup(
@@ -330,18 +336,20 @@ class _GroupDetailState extends State<GroupDetail> {
             ),
           ],
         ),
-        const SectionLabel('成员'),
-        AppGroup(
-          children: [
-            for (final r in members)
-              if (r['state'] == 'joined' || r['has_conflict'] == true)
-                AppRow(
-                  title: Text(r['name'] as String),
-                  subtitle: r['has_conflict'] == true
-                      ? const Text('成员关系待确认')
-                      : null,
-                ),
-          ],
+        AppSection(
+          title: '成员',
+          child: AppGroup(
+            children: [
+              for (final r in members)
+                if (r['state'] == 'joined' || r['has_conflict'] == true)
+                  AppRow(
+                    title: Text(r['name'] as String),
+                    subtitle: r['has_conflict'] == true
+                        ? const Text('成员关系待确认')
+                        : null,
+                  ),
+            ],
+          ),
         ),
         AppButton(onPressed: busy ? null : remove, child: const Text('删除群组')),
       ],

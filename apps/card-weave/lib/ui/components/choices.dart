@@ -155,6 +155,7 @@ class TypeLabel extends StatelessWidget {
           text,
           style: TextStyle(
             fontSize: AppTokens.body,
+            height: 1.3,
             color: CupertinoTheme.of(context).primaryColor,
           ),
         ),

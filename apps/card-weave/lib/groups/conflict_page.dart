@@ -93,8 +93,7 @@ class _EntityConflictPageState extends State<EntityConflictPage> {
       canPop: !busy,
       child: AppPage(
         navigationBar: AppNavigation(title: Text(group ? '群组冲突' : '成员关系冲突')),
-        body: ListView(
-          padding: AppTokens.pagePadding,
+        body: AppSectionScrollView(
           children: [
             if (error != null) AppStatus(error!, kind: AppStatusKind.error),
             if (subject != null) Text(subject!),

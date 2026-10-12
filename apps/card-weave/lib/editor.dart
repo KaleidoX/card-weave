@@ -136,7 +136,6 @@ class _ContactEditorState extends State<ContactEditor> {
     validator: (v) => required && (v ?? '').trim().isEmpty ? '请填写$title' : null,
   );
 
-  Widget section(String title) => SectionLabel(title);
   Widget dates() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -189,8 +188,7 @@ class _ContactEditorState extends State<ContactEditor> {
                 child: SingleChildScrollView(
                   controller: scroll,
                   padding: AppTokens.pagePadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: AppSectionList(
                     children: [
                       if (error != null)
                         SurfaceBox(
@@ -276,19 +274,16 @@ class _ContactEditorState extends State<ContactEditor> {
                           data = contactDocument(data);
                         }),
                       ),
-                      const SizedBox(height: AppTokens.section),
                       ContactValuesGroup(
                         initial: data['phones'] as List,
                         kind: ContactValueKind.phone,
                         onChanged: (values) => update('phones', values),
                       ),
-                      const SizedBox(height: AppTokens.section),
                       ContactValuesGroup(
                         initial: data['emails'] as List,
                         kind: ContactValueKind.email,
                         onChanged: (values) => update('emails', values),
                       ),
-                      const SizedBox(height: AppTokens.section),
                       AppGroup(
                         alignment: AppAlignment.icon,
                         children: [
@@ -315,9 +310,7 @@ class _ContactEditorState extends State<ContactEditor> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppTokens.section),
                       dates(),
-                      const SizedBox(height: AppTokens.section),
                       AppGroup(
                         alignment: AppAlignment.icon,
                         children: [
@@ -342,7 +335,6 @@ class _ContactEditorState extends State<ContactEditor> {
                         model: widget.model,
                         contactId: widget.original?['id'] as String?,
                       ),
-                      const SizedBox(height: 16),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(

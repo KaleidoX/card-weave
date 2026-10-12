@@ -147,33 +147,50 @@ class _ContactValuesGroupState extends State<ContactValuesGroup> {
                 child: Text(widget.targetNames[entry.target] ?? entry.value),
               )
             else
-              AppInput(
-                label: title,
-                labelVisible: false,
-                inline: true,
-                key: ValueKey(entry.target),
-                initialValue: entry.value,
-                keyboardType: widget.kind.keyboard,
-                minLines: widget.kind == ContactValueKind.address ? 2 : 1,
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? null
-                    : contactTextError(v, maxBytes: widget.kind.maxBytes) ??
-                          contactTextError(
-                            entry.label,
-                            maxBytes: 128,
-                            required: widget.kind.requiresLabel,
-                          ),
-                onChanged: (v) {
-                  setState(() {
-                    entry.value = v;
-                    if (v.trim().isNotEmpty &&
-                        entries.last == entry &&
-                        entries.length < 32) {
-                      entries.add(_ValueEntry(defaultLabel, ''));
-                    }
-                  });
-                  publish();
-                },
+              Row(
+                children: [
+                  Expanded(
+                    child: AppInput(
+                      label: title,
+                      labelVisible: false,
+                      inline: true,
+                      key: ValueKey(entry.target),
+                      initialValue: entry.value,
+                      keyboardType: widget.kind.keyboard,
+                      multiline: widget.kind == ContactValueKind.address,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? null
+                          : contactTextError(
+                                  v,
+                                  maxBytes: widget.kind.maxBytes,
+                                ) ??
+                                contactTextError(
+                                  entry.label,
+                                  maxBytes: 128,
+                                  required: widget.kind.requiresLabel,
+                                ),
+                      onChanged: (v) {
+                        setState(() {
+                          entry.value = v;
+                          if (v.trim().isNotEmpty &&
+                              entries.last == entry &&
+                              entries.length < 32) {
+                            entries.add(_ValueEntry(defaultLabel, ''));
+                          }
+                        });
+                        publish();
+                      },
+                    ),
+                  ),
+                  if (widget.selectContact != null)
+                    AppIconButton(
+                      tooltip: '选择联系人',
+                      onPressed: () => select(entry),
+                      icon: const Icon(
+                        CupertinoIcons.person_crop_circle_badge_plus,
+                      ),
+                    ),
+                ],
               ),
             if (entry.target != null &&
                 [
@@ -185,11 +202,6 @@ class _ContactValuesGroupState extends State<ContactValuesGroup> {
                     ? '关联联系人有冲突'
                     : '关联联系人不可用',
                 style: AppTheme.of(context).text.bodySmall,
-              ),
-            if (widget.selectContact != null && entry.target == null)
-              AppButton(
-                onPressed: () => select(entry),
-                child: const Text('选择联系人'),
               ),
           ],
         ),

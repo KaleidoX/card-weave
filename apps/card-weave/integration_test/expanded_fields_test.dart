@@ -44,8 +44,9 @@ void main() {
       }
 
       Future<void> extra(String label) async {
-        await tap('添加更多信息');
-        await tap(label);
+        if (find.text('更多信息').evaluate().isNotEmpty) {
+          await tap('更多信息');
+        }
       }
 
       await waitFor(() => m.ready && !m.loading);
@@ -125,8 +126,7 @@ void main() {
         await tap('放弃修改');
         expect((await m.get(id))!['data'], saved);
         await tap('编辑');
-        await t.ensureVisible(find.bySemanticsLabel(RegExp('移除网站')));
-        await t.tap(find.bySemanticsLabel(RegExp('移除网站')));
+        await enter('网站', '');
         await t.pumpAndSettle();
         await tap('完成');
         await waitFor(

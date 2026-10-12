@@ -89,9 +89,10 @@ void main() {
         'joined',
       );
       await tap('编辑');
-      await tap('添加更多信息');
-      await tap('关联人');
-      await tap('选择联系人');
+      await tap('更多信息');
+      await t.ensureVisible(find.bySemanticsLabel('选择联系人').last);
+      await t.tap(find.bySemanticsLabel('选择联系人').last);
+      await t.pumpAndSettle();
       await tap('Beta fixture');
       await tap('完成');
       await waitFor(() => find.text('编辑').evaluate().isNotEmpty);
@@ -110,7 +111,9 @@ void main() {
         b['id'],
       );
       await tap('编辑');
-      await tap('选择联系人');
+      await t.ensureVisible(find.bySemanticsLabel('选择联系人').last);
+      await t.tap(find.bySemanticsLabel('选择联系人').last);
+      await t.pumpAndSettle();
       await tap('Beta fixture');
       expect(find.text('已添加此关联'), findsOneWidget);
       await tap('知道了');

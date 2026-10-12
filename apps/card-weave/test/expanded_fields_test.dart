@@ -4,11 +4,101 @@ import 'package:card_weave/contacts/extra_fields.dart';
 import 'package:card_weave/contacts/contact_content.dart';
 import 'package:card_weave/contacts/fields.dart';
 import 'package:card_weave/contacts/name_group.dart';
-import 'package:card_weave/ui/theme.dart';
+import 'package:card_weave/design.dart';
+import 'package:card_weave/contacts/values_group.dart';
+import 'package:card_weave/contacts/value_kind.dart';
 
 void main() {
   testWidgets(
-    'Optional fields stay out of the draft until input and can be removed',
+    'Empty address and relation rows stay compact and address grows with input',
+    (t) async {
+      t.view.physicalSize = const Size(430, 900);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      var selected = false;
+      await t.pumpWidget(
+        CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  for (final kind in [
+                    ContactValueKind.address,
+                    ContactValueKind.relation,
+                  ])
+                    ContactValuesGroup(
+                      key: ValueKey(kind),
+                      initial: const [],
+                      kind: kind,
+                      selectContact: kind == ContactValueKind.relation
+                          ? () async {
+                              selected = true;
+                              return null;
+                            }
+                          : null,
+                      onChanged: (_) {},
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final kind in [
+        ContactValueKind.address,
+        ContactValueKind.relation,
+      ]) {
+        expect(
+          t.getSize(find.byKey(ValueKey(kind))).height,
+          lessThanOrEqualTo(60),
+        );
+      }
+      await t.tap(find.bySemanticsLabel('选择联系人'));
+      await t.pumpAndSettle();
+      expect(selected, isTrue);
+      final labelTop = t.getTopLeft(find.text('住宅').first).dy;
+      double baseline(RenderBox box) =>
+          box.localToGlobal(Offset.zero).dy +
+          box.getDryBaseline(
+            BoxConstraints.tight(box.size),
+            TextBaseline.alphabetic,
+          )!;
+      final labelBox = t.renderObject<RenderBox>(find.text('住宅').first);
+      final inputBox = t
+          .state<EditableTextState>(
+            find.descendant(
+              of: find.byKey(const ValueKey('input-地址')).first,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .renderEditable;
+      expect(baseline(inputBox), closeTo(baseline(labelBox), 1));
+      final divider = find.byKey(const ValueKey('field-label-divider')).first;
+      final dividerBefore = t.getRect(divider);
+      await t.enterText(
+        find.byKey(const ValueKey('input-地址')).first,
+        '第一行\n第二行\n第三行',
+      );
+      await t.pumpAndSettle();
+      expect(
+        t.getSize(find.byKey(const ValueKey('input-地址')).first).height,
+        greaterThan(50),
+      );
+      expect(t.getTopLeft(find.text('住宅').first).dy, labelTop);
+      expect(baseline(inputBox), closeTo(baseline(labelBox), 1));
+      expect(t.getRect(divider).top, dividerBefore.top);
+      expect(t.getRect(divider).height, greaterThan(dividerBefore.height));
+      await t.enterText(find.byKey(const ValueKey('input-地址')).first, '短地址');
+      await t.pumpAndSettle();
+      expect(t.getTopLeft(find.text('住宅').first).dy, labelTop);
+      expect(baseline(inputBox), closeTo(baseline(labelBox), 1));
+      expect(t.getRect(divider).height, dividerBefore.height);
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'More information expands all fields without changing the draft',
     (t) async {
       final data = <String, dynamic>{'display_name': 'Fixture'};
       final events = <String>[];
@@ -19,12 +109,21 @@ void main() {
             child: SingleChildScrollView(
               child: Form(
                 key: form,
-                child: ContactExtraFields(
-                  data: data,
-                  onChanged: (k, v) {
-                    data[k] = v;
-                    events.add(k);
-                  },
+                child: AppSectionList(
+                  children: [
+                    const AppGroup(
+                      key: ValueKey('notes-card'),
+                      children: [Text('备注')],
+                    ),
+                    ContactExtraFields(
+                      key: const ValueKey('extra-section'),
+                      data: data,
+                      onChanged: (k, v) {
+                        data[k] = v;
+                        events.add(k);
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -38,8 +137,18 @@ void main() {
         await t.pumpAndSettle();
       }
 
-      await tap('添加更多信息');
-      await tap('昵称');
+      double extraGap() =>
+          t.getTopLeft(find.byKey(const ValueKey('extra-section'))).dy -
+          t.getBottomLeft(find.byKey(const ValueKey('notes-card'))).dy;
+      expect(extraGap(), 20);
+      await tap('更多信息');
+      expect(extraGap(), 20);
+      final first = find.byKey(const ValueKey('extra-nickname'));
+      final second = find.byKey(const ValueKey('extra-phonetic'));
+      expect(t.getTopLeft(second).dy - t.getBottomLeft(first).dy, 20);
+      for (final label in ['昵称', '姓氏拼音', '地址', '即时消息', '网站', '关联人']) {
+        expect(find.byKey(ValueKey('input-$label')), findsOneWidget);
+      }
       expect(events, isEmpty);
       final input = find.byKey(const ValueKey('input-昵称'));
       await t.enterText(input, '汉' * 342);
@@ -50,10 +159,10 @@ void main() {
       await t.enterText(input, 'Nickname');
       await t.pumpAndSettle();
       expect(form.currentState!.validate(), true);
-      await t.tap(find.bySemanticsLabel(RegExp('移除昵称')));
+      await t.enterText(input, '');
       await t.pumpAndSettle();
       expect(contactDocument(data).containsKey('nickname'), false);
-      expect(find.byKey(const ValueKey('input-昵称')), findsNothing);
+      expect(find.byKey(const ValueKey('input-昵称')), findsOneWidget);
     },
   );
   testWidgets(

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../theme.dart';
 import '../tokens.dart';
+import 'sections.dart';
 
 class AppPage extends StatelessWidget {
   final ObstructingPreferredSizeWidget? navigationBar;
@@ -114,7 +115,7 @@ class GroupedPageList extends StatelessWidget {
     slivers: [
       SliverPadding(
         padding: AppTokens.pagePadding,
-        sliver: SliverList.list(children: children),
+        sliver: SliverToBoxAdapter(child: AppSectionList(children: children)),
       ),
     ],
   );

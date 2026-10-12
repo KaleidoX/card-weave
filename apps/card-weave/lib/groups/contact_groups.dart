@@ -72,8 +72,7 @@ class _ContactGroupsState extends State<ContactGroups> {
     title: '所属群组',
     busy: busy,
     onDone: loading ? null : save,
-    body: ListView(
-      padding: AppTokens.pagePadding,
+    body: AppSectionScrollView(
       children: [
         if (error != null) AppStatus(error!, kind: AppStatusKind.error),
         if (error != null)

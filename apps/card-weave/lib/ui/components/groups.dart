@@ -5,10 +5,11 @@ import '../tokens.dart';
 
 class SectionLabel extends StatelessWidget {
   final String text;
-  const SectionLabel(this.text, {super.key});
+  final double topSpacing;
+  const SectionLabel(this.text, {super.key, this.topSpacing = 24});
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+    padding: EdgeInsets.fromLTRB(16, topSpacing, 16, 8),
     child: Text(
       text,
       style: TextStyle(

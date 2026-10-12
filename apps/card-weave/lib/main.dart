@@ -269,47 +269,48 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Widget syncPage() => GroupedPageList(
     title: '同步',
     children: [
-      const SectionLabel('当前状态'),
-      AppGroup(
-        children: [
-          AppRow(
-            title: const Text('待上传更改'),
-            trailing: Text('${m.status['pending_outbox'] ?? 0} 项'),
-          ),
-          AppRow(
-            title: const Text('待处理冲突'),
-            trailing: Text('${m.status['conflict_count'] ?? 0} 位联系人 ›'),
-            onTap: () => Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => ConflictList(m)),
-            ),
-          ),
-          if (m.lastSync != null) ...[
+      AppSection(
+        title: '当前状态',
+        child: AppGroup(
+          children: [
             AppRow(
-              title: const Text('最近完成扫描'),
-              subtitle: Text(
-                m.lastSync!.replaceFirst('T', ' ').split('.').first,
+              title: const Text('待上传更改'),
+              trailing: Text('${m.status['pending_outbox'] ?? 0} 项'),
+            ),
+            AppRow(
+              title: const Text('待处理冲突'),
+              trailing: Text('${m.status['conflict_count'] ?? 0} 位联系人 ›'),
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(builder: (_) => ConflictList(m)),
               ),
             ),
+            if (m.lastSync != null) ...[
+              AppRow(
+                title: const Text('最近完成扫描'),
+                subtitle: Text(
+                  m.lastSync!.replaceFirst('T', ' ').split('.').first,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
       if (m.status['protocol_healthy'] == false) ...[
-        const SizedBox(height: 16),
         const AppStatus(
           '部分远端数据尚未处理完成。请重试同步；若持续失败，请检查远端数据与服务。',
           kind: AppStatusKind.warning,
         ),
       ],
       if (m.conflicts.isNotEmpty) ...[
-        const SectionLabel('需要你的选择'),
-        conflictBanner(),
+        AppSection(title: '需要你的选择', child: conflictBanner()),
       ],
       if (m.syncMessage != null) ...[
-        const SectionLabel('本轮同步结果'),
-        AppStatus(m.syncMessage!, kind: AppStatusKind.success),
+        AppSection(
+          title: '本轮同步结果',
+          child: AppStatus(m.syncMessage!, kind: AppStatusKind.success),
+        ),
       ],
-      const SizedBox(height: 24),
       SurfaceBox(
         child: AppRow(
           leading: m.syncing ? const CupertinoActivityIndicator() : null,
@@ -342,25 +343,26 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       ),
       if (syncError != null) AppStatus(syncError!, kind: AppStatusKind.error),
-      const SectionLabel('同步位置'),
-      AppGroup(
-        children: [
-          AppRow(
-            leading: const Icon(CupertinoIcons.cloud),
-            title: Text(
-              m.config.isEmpty
-                  ? '尚未配置'
-                  : m.config['type'] == 's3'
-                  ? 'S3 兼容存储'
-                  : 'WebDAV',
+      AppSection(
+        title: '同步位置',
+        child: AppGroup(
+          children: [
+            AppRow(
+              leading: const Icon(CupertinoIcons.cloud),
+              title: Text(
+                m.config.isEmpty
+                    ? '尚未配置'
+                    : m.config['type'] == 's3'
+                    ? 'S3 兼容存储'
+                    : 'WebDAV',
+              ),
+              subtitle: const Text('连接设置与账号'),
+              trailing: const Icon(CupertinoIcons.chevron_forward),
+              onTap: () => setState(() => tab = 2),
             ),
-            subtitle: const Text('连接设置与账号'),
-            trailing: const Icon(CupertinoIcons.chevron_forward),
-            onTap: () => setState(() => tab = 2),
-          ),
-        ],
+          ],
+        ),
       ),
-      const SizedBox(height: 16),
       Text(
         '本轮结果只描述当前同步；并发修改会作为冲突保留。',
         style: AppTheme.of(context).text.bodySmall,
@@ -538,8 +540,7 @@ class _ContactDetailState extends State<ContactDetail> {
         : Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: AppTokens.width),
-              child: ListView(
-                padding: AppTokens.pagePadding,
+              child: AppSectionScrollView(
                 children: [
                   if (error != null)
                     AppStatus(error!, kind: AppStatusKind.error),
@@ -580,20 +581,21 @@ class _ContactDetailState extends State<ContactDetail> {
                           ),
                         ],
                       ),
-                    ContactRelationsView(
-                      widget.model,
-                      object(contact!['data']),
-                      onOpen: (id) async {
-                        await Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (_) => ContactDetail(widget.model, id),
-                          ),
-                        );
-                        await load();
-                      },
-                    ),
-                    const SizedBox(height: 24),
+                    if ((contact!['data']['relations'] as List? ?? [])
+                        .isNotEmpty)
+                      ContactRelationsView(
+                        widget.model,
+                        object(contact!['data']),
+                        onOpen: (id) async {
+                          await Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              builder: (_) => ContactDetail(widget.model, id),
+                            ),
+                          );
+                          await load();
+                        },
+                      ),
                     AppButton.icon(
                       onPressed: contact!['has_conflict'] == true
                           ? null
@@ -656,12 +658,9 @@ class ConflictList extends StatelessWidget {
       navigationBar: AppNavigation(title: const Text('处理冲突')),
       body: model.conflicts.isEmpty
           ? const AppEmptyState('没有待处理的冲突')
-          : ListView(
+          : AppSectionScrollView(
               children: [
-                const Padding(
-                  padding: AppTokens.pagePadding,
-                  child: Text('资料在不同设备上被修改。请选择保留的版本或编辑合并结果。'),
-                ),
+                const Text('资料在不同设备上被修改。请选择保留的版本或编辑合并结果。'),
                 ...model.conflicts.map((conflict) {
                   if (conflict['entity_type'] != null) {
                     return AppRow(
@@ -680,30 +679,22 @@ class ConflictList extends StatelessWidget {
                   }
                   final candidates = conflict['candidates'] as List;
                   final named = candidates.where((c) => c['contact'] != null);
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppTokens.page,
-                      0,
-                      AppTokens.page,
-                      AppTokens.section,
-                    ),
-                    child: SurfaceBox(
-                      child: AppRow(
-                        leading: const Icon(CupertinoIcons.square_stack),
-                        title: Text(
-                          named.isEmpty
-                              ? '已删除联系人'
-                              : named.first['contact']['data']['display_name'],
-                        ),
-                        subtitle: Text(
-                          '${candidates.length} 个候选版本${candidates.any((c) => c['contact'] == null) ? ' · 含删除版本' : ''}',
-                        ),
-                        trailing: const Icon(CupertinoIcons.chevron_forward),
-                        onTap: () => Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (_) => ConflictPage(model, copy(conflict)),
-                          ),
+                  return SurfaceBox(
+                    child: AppRow(
+                      leading: const Icon(CupertinoIcons.square_stack),
+                      title: Text(
+                        named.isEmpty
+                            ? '已删除联系人'
+                            : named.first['contact']['data']['display_name'],
+                      ),
+                      subtitle: Text(
+                        '${candidates.length} 个候选版本${candidates.any((c) => c['contact'] == null) ? ' · 含删除版本' : ''}',
+                      ),
+                      trailing: const Icon(CupertinoIcons.chevron_forward),
+                      onTap: () => Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) => ConflictPage(model, copy(conflict)),
                         ),
                       ),
                     ),
@@ -747,16 +738,12 @@ class _ConflictPageState extends State<ConflictPage> {
     };
     return AppPage(
       navigationBar: AppNavigation(title: const Text('选择最终版本')),
-      body: ListView(
-        padding: AppTokens.pagePadding,
+      body: AppSectionScrollView(
         children: [
           const Text('下面列出不同的字段。请选择保留的完整版本，也可以查看完整资料或编辑合并。之后到达的新版本仍会保留。'),
           if (error != null) AppStatus(error!, kind: AppStatusKind.error),
           for (var i = 0; i < candidates.length; i++)
             SurfaceBox(
-              margin: const EdgeInsets.symmetric(
-                vertical: AppTokens.section / 2,
-              ),
               child: Padding(
                 padding: AppTokens.pagePadding,
                 child: Column(

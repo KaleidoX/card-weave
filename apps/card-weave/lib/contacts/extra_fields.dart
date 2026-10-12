@@ -55,123 +55,89 @@ class _ContactExtraFieldsState extends State<ContactExtraFields> {
     } catch (_) {}
   }
 
-  late final visible = <String>{
-    for (final key in extraSections.keys)
-      if (key == 'phonetic'
-          ? phoneticFields.any(
-              (k) => (widget.data[k] as String? ?? '').isNotEmpty,
-            )
-          : widget.data[key] is List
-          ? (widget.data[key] as List).isNotEmpty
-          : (widget.data[key] as String? ?? '').isNotEmpty)
-        key,
-  };
-  void remove(String key) {
-    FocusScope.of(context).unfocus();
-    for (final k in key == 'phonetic' ? phoneticFields : [key]) {
-      widget.onChanged(k, widget.data[k] is List ? <dynamic>[] : '');
-    }
-    setState(() => visible.remove(key));
-  }
+  bool expanded = false;
+  late final populated = extraSections.keys.where(hasValue).toSet();
+  bool hasValue(String key) => key == 'phonetic'
+      ? phoneticFields.any((k) => (widget.data[k] as String? ?? '').isNotEmpty)
+      : widget.data[key] is List
+      ? (widget.data[key] as List).isNotEmpty
+      : (widget.data[key] as String? ?? '').isNotEmpty;
 
   Widget group(String key) {
     final kind = ContactValueKind.values
         .where((k) => k.field == key)
         .firstOrNull;
-    return Column(
+    return AppSection(
       key: ValueKey('extra-$key'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: SectionLabel(extraSections[key]!)),
-            AppRemoveButton(
-              label: '移除${extraSections[key]}',
-              onPressed: () => remove(key),
-            ),
-          ],
-        ),
-        if (kind != null)
-          ContactValuesGroup(
-            initial: widget.data[key] as List? ?? [],
-            kind: kind,
-            targetNames: names,
-            targetStates: states,
-            selectContact:
-                kind == ContactValueKind.relation && widget.model != null
-                ? () => Navigator.push<Map<String, dynamic>>(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => ContactSelector(
-                        widget.model!,
-                        exclude: widget.contactId,
+      title: extraSections[key]!,
+      child: kind != null
+          ? ContactValuesGroup(
+              initial: widget.data[key] as List? ?? [],
+              kind: kind,
+              targetNames: names,
+              targetStates: states,
+              selectContact:
+                  kind == ContactValueKind.relation && widget.model != null
+                  ? () => Navigator.push<Map<String, dynamic>>(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (_) => ContactSelector(
+                          widget.model!,
+                          exclude: widget.contactId,
+                        ),
                       ),
+                    )
+                  : null,
+              onChanged: (v) => widget.onChanged(key, v),
+            )
+          : AppGroup(
+              alignment: AppAlignment.icon,
+              children: [
+                for (final field in key == 'phonetic' ? phoneticFields : [key])
+                  AppFieldRow(
+                    icon: field != phoneticFields.first && key == 'phonetic'
+                        ? null
+                        : key == 'website'
+                        ? CupertinoIcons.globe
+                        : CupertinoIcons.person,
+                    child: AppInput(
+                      label: contactFieldLabels[field]!,
+                      labelVisible: false,
+                      inline: true,
+                      initialValue: widget.data[field] as String? ?? '',
+                      keyboardType: key == 'website'
+                          ? TextInputType.url
+                          : TextInputType.text,
+                      validator: (v) => contactTextError(
+                        v,
+                        maxBytes: key == 'website' ? 4096 : 1024,
+                      ),
+                      onChanged: (v) => widget.onChanged(field, v),
                     ),
-                  )
-                : null,
-            onChanged: (v) => widget.onChanged(key, v),
-          )
-        else
-          AppGroup(
-            alignment: AppAlignment.icon,
-            children: [
-              for (final field in key == 'phonetic' ? phoneticFields : [key])
-                AppFieldRow(
-                  icon: field != phoneticFields.first && key == 'phonetic'
-                      ? null
-                      : key == 'website'
-                      ? CupertinoIcons.globe
-                      : CupertinoIcons.person,
-                  child: AppInput(
-                    label: contactFieldLabels[field]!,
-                    labelVisible: false,
-                    inline: true,
-                    initialValue: widget.data[field] as String? ?? '',
-                    keyboardType: key == 'website'
-                        ? TextInputType.url
-                        : TextInputType.text,
-                    validator: (v) => contactTextError(
-                      v,
-                      maxBytes: key == 'website' ? 4096 : 1024,
-                    ),
-                    onChanged: (v) => widget.onChanged(field, v),
                   ),
-                ),
-            ],
-          ),
-      ],
+              ],
+            ),
     );
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(BuildContext context) => AppSectionList(
     children: [
-      for (final key in extraSections.keys)
-        if (visible.contains(key)) group(key),
-      const SizedBox(height: AppTokens.section),
-      if (visible.length < extraSections.length)
+      if (!expanded)
         AppGroup(
           children: [
             AppRow(
-              leading: const Icon(CupertinoIcons.add),
-              title: const Text('添加更多信息'),
-              onTap: () async {
+              title: const Text('更多信息'),
+              trailing: const Icon(CupertinoIcons.chevron_down),
+              onTap: () {
                 FocusScope.of(context).unfocus();
-                final key = await chooseOption<String>(
-                  context,
-                  title: '添加更多信息',
-                  selected: '',
-                  options: {
-                    for (final e in extraSections.entries)
-                      if (!visible.contains(e.key)) e.key: e.value,
-                  },
-                );
-                if (key != null && mounted) setState(() => visible.add(key));
+                setState(() => expanded = true);
               },
             ),
           ],
         ),
+      for (final key in extraSections.keys)
+        if (expanded || populated.contains(key)) group(key),
     ],
   );
 }

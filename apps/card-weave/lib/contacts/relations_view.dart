@@ -42,58 +42,51 @@ class _ContactRelationsViewState extends State<ContactRelationsView> {
     if ((widget.data['relations'] as List? ?? []).isEmpty) {
       return const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionLabel(widget.comparison ? '关联人当前状态' : '关联人'),
-        FutureBuilder<dynamic>(
-          future: views,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return AppGroup(
-                children: [
-                  AppStatus(
-                    message(snapshot.error!),
-                    kind: AppStatusKind.error,
-                  ),
-                  AppButton(
-                    onPressed: () => setState(reload),
-                    child: const Text('重试'),
-                  ),
-                ],
-              );
-            }
-            if (!snapshot.hasData) return const CupertinoActivityIndicator();
+    return AppSection(
+      title: widget.comparison ? '关联人当前状态' : '关联人',
+      child: FutureBuilder<dynamic>(
+        future: views,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
             return AppGroup(
               children: [
-                for (final v in snapshot.data as List)
-                  AppRow(
-                    title: AppSelectableText(v['name'] as String),
-                    subtitle: Text(
-                      '${v['label']}${v['state'] == 'unavailable'
-                          ? ' · 联系人不可用（可能未同步或已删除）'
-                          : v['state'] == 'conflict'
-                          ? ' · 联系人有冲突'
-                          : ''}',
-                    ),
-                    trailing: v['state'] == 'available' && widget.onOpen != null
-                        ? AppIconButton(
-                            tooltip: '打开关联联系人',
-                            icon: const Icon(CupertinoIcons.chevron_forward),
-                            onPressed: () => widget.onOpen!(
-                              v['target_contact_id'] as String,
-                            ),
-                          )
-                        : null,
-                    onTap: v['state'] == 'available' && widget.onOpen != null
-                        ? () => widget.onOpen!(v['target_contact_id'] as String)
-                        : null,
-                  ),
+                AppStatus(message(snapshot.error!), kind: AppStatusKind.error),
+                AppButton(
+                  onPressed: () => setState(reload),
+                  child: const Text('重试'),
+                ),
               ],
             );
-          },
-        ),
-      ],
+          }
+          if (!snapshot.hasData) return const CupertinoActivityIndicator();
+          return AppGroup(
+            children: [
+              for (final v in snapshot.data as List)
+                AppRow(
+                  title: AppSelectableText(v['name'] as String),
+                  subtitle: Text(
+                    '${v['label']}${v['state'] == 'unavailable'
+                        ? ' · 联系人不可用（可能未同步或已删除）'
+                        : v['state'] == 'conflict'
+                        ? ' · 联系人有冲突'
+                        : ''}',
+                  ),
+                  trailing: v['state'] == 'available' && widget.onOpen != null
+                      ? AppIconButton(
+                          tooltip: '打开关联联系人',
+                          icon: const Icon(CupertinoIcons.chevron_forward),
+                          onPressed: () =>
+                              widget.onOpen!(v['target_contact_id'] as String),
+                        )
+                      : null,
+                  onTap: v['state'] == 'available' && widget.onOpen != null
+                      ? () => widget.onOpen!(v['target_contact_id'] as String)
+                      : null,
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

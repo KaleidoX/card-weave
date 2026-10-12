@@ -33,15 +33,12 @@ class _UpgradeBookPageState extends State<UpgradeBookPage> {
     canPop: !busy,
     child: AppPage(
       navigationBar: AppNavigation(title: const Text('升级通讯录')),
-      body: ListView(
-        padding: AppTokens.pagePadding,
+      body: AppSectionScrollView(
         children: [
           const Text('升级后可使用群组。联系人资料与 ID 会保留，原通讯录不会删除。'),
-          const SizedBox(height: 16),
           const Text(
             '将创建新的通讯录加入信息，其他设备需要升级并重新加入。请先让所有设备完成同步，并解决全部冲突；升级期间不要在其他设备继续编辑旧通讯录。',
           ),
-          const SizedBox(height: 16),
           const Text('新通讯录产生修改后，不应直接切回旧库。旧远端数据不会自动删除。'),
           AppSwitchRow(
             title: const Text('我已汇集所有设备修改，并了解需要重新加入'),
