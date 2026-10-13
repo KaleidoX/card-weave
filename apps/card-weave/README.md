@@ -148,3 +148,6 @@ WebDAV 设置将服务地址与同步目录分开填写。坚果云服务地址�
 Android 9 Provider 不支持将只读标记列直接加入查询投影，使用带只读条件的 ID 查询，并在更新/删除时再次带只读条件及预期行数；不支持这些条件的 Provider 会拒绝操作，不降级成无条件覆盖。API 30+ 使用公开本地账户 getter，旧版本使用本地 null 账户路径；实际验证范围目前为 Android 9 x86_64 虚拟机。无账户联系人以外的云端账户由各自服务决定后续上传行为。
 
 隔离原生验收：`CARDWEAVE_ACCEPTANCE=1 CARDWEAVE_ABI=x86_64 flutter test integration_test/system_contacts_write_test.dart --no-pub -d DEVICE`，需先运行相同 ABI 的 Android 构建脚本。只可在测试设备运行；授予隔离应用 READ_CONTACTS/WRITE_CONTACTS。预置名为 `Write Protected Fixture` 的单一 raw contact，包含公司 `Old company`、部门 DATA5=`Keep department`、只读电话 `+1 202-555-0190` 和 `vnd.fixture/contact` 扩展 DATA1=`Keep extension`。测试验证创建、关联、字段往返、清空、系统端修改、过期拒绝、中断恢复、失效目标与扩展保留。测试输出创建的 raw ID，执行后只清理本次合成记录；普通应用使用独立 applicationId，不能用测试覆盖。
+
+
+运行 Android 集成测试优先使用 `CARDWEAVE_ABI=x86_64 bash tool/test_android.sh DEVICE integration_test/NAME_test.dart`。该入口强制先构建并校验 `io.cardweave.app.acceptance` 包名，再调用 Flutter。不能只设置环境变量后直接在残留普通 APK 的构建目录执行 `flutter test`：当前 Flutter 会在重建前缓存旧 APK 的应用 ID，并在结束时清理它，可能误卸载普通应用。普通包与测试包切换后必须重新经过该入口。测试仍只在专用设备上运行，权限和合成 Provider 数据按各测试契约准备。
