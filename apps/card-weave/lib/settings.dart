@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'model.dart';
 import 'groups/upgrade.dart';
-import 'system_contacts/page.dart';
+import 'system_contacts/hub.dart';
 import 'design.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -120,13 +120,13 @@ class _SettingsPageState extends State<SettingsPage> {
           AppGroup(
             children: [
               AppRow(
-                title: const Text('导入系统通讯录'),
+                title: const Text('系统通讯录'),
                 leading: const Icon(CupertinoIcons.person_crop_rectangle),
                 trailing: const Icon(CupertinoIcons.chevron_forward),
                 onTap: () => Navigator.push(
                   context,
                   CupertinoPageRoute(
-                    builder: (_) => SystemContactsImportPage(widget.model),
+                    builder: (_) => SystemContactsHub(widget.model),
                   ),
                 ),
               ),

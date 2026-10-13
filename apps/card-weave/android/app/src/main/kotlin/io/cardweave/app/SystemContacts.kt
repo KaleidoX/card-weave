@@ -13,34 +13,38 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
-/** Read-only, user-triggered access. Never writes contacts or logs their contents. */
+/** User-triggered provider access; contact contents are never logged. */
 class SystemContacts(private val activity: Activity, private val channel: MethodChannel) {
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private var permissionResult: MethodChannel.Result? = null
     private var closed = false
+    private var requestingWrite = false
+    private val writer = SystemContactsWriter(activity)
     private val preferences = activity.getSharedPreferences("contacts_permission", 0)
 
     init { channel.setMethodCallHandler(::handle) }
 
     private fun granted() = activity.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
-    private fun permissionState(): String = when {
-        granted() -> "granted"
-        preferences.getBoolean("asked", false) && !activity.shouldShowRequestPermissionRationale(Manifest.permission.READ_CONTACTS) -> "blocked"
+    private fun permissionState(write: Boolean = false): String = when {
+        granted() && (!write || activity.checkSelfPermission(Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED) -> "granted"
+        preferences.getBoolean(if (write) "askedWrite" else "asked", false) && !activity.shouldShowRequestPermissionRationale(if (write) Manifest.permission.WRITE_CONTACTS else Manifest.permission.READ_CONTACTS) -> "blocked"
         else -> "denied"
     }
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "manufacturer" -> result.success(android.os.Build.MANUFACTURER)
-            "permission" -> result.success(permissionState())
-            "requestPermission" -> {
-                if (granted()) result.success("granted")
+            "permission", "writePermission" -> result.success(permissionState(call.method == "writePermission"))
+            "requestPermission", "requestWritePermission" -> {
+                val write = call.method == "requestWritePermission"
+                if (permissionState(write) == "granted") result.success("granted")
                 else if (permissionResult != null) result.error("busy", "Permission request pending", null)
                 else {
                     permissionResult = result
-                    preferences.edit().putBoolean("asked", true).apply()
-                    activity.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), REQUEST)
+                    requestingWrite = write
+                    preferences.edit().putBoolean(if (write) "askedWrite" else "asked", true).apply()
+                    activity.requestPermissions(if (write) arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS) else arrayOf(Manifest.permission.READ_CONTACTS), REQUEST)
                 }
             }
             "openSettings" -> {
@@ -54,27 +58,45 @@ class SystemContacts(private val activity: Activity, private val channel: Method
                 require(additional.size <= 64 && additional.all { it.length <= 256 && it.startsWith("vnd.") })
                 detail(id, additional.toSet())
             }
+            "writeAccounts" -> query(result) { writer.accounts() }
+            "writeTargets" -> query(result) { writer.targets(call.argument<String>("id")!!) }
+            "writeSnapshot" -> query(result) { writer.snapshot(call.argument<String>("id")!!) }
+            "writeRecover" -> query(result) { writer.recover(call.argument<String>("token")!!) }
+            "writeApply" -> query(result) {
+                if (permissionState(true) != "granted") throw SecurityException()
+                @Suppress("UNCHECKED_CAST")
+                writer.write(call.arguments as Map<String, Any?>)
+            }
+            "linkGet" -> local(result) { writer.link(call.argument<String>("key")!!) }
+            "linkPut" -> local(result) {
+                writer.saveLink(call.argument<String>("key")!!, call.argument<String>("value"))
+                null
+            }
             else -> result.notImplemented()
         }
     }
 
     fun onPermissionResult(request: Int): Boolean {
         if (request != REQUEST) return false
-        permissionResult?.success(permissionState())
+        permissionResult?.success(permissionState(requestingWrite))
         permissionResult = null
         return true
     }
 
-    private fun query(result: MethodChannel.Result, block: () -> Any) {
+    private fun query(result: MethodChannel.Result, block: () -> Any?) = local(result) {
+        if (!granted()) throw SecurityException()
+        block()
+    }
+
+    private fun local(result: MethodChannel.Result, block: () -> Any?) {
         worker.execute {
             try {
-                if (!granted()) throw SecurityException()
                 val value = block()
                 main.post { if (!closed) result.success(value) }
             } catch (_: SecurityException) {
                 main.post { if (!closed) result.error("permission", "Contacts permission required", null) }
             } catch (_: Exception) {
-                main.post { if (!closed) result.error("read_failed", "Unable to read contacts", null) }
+                main.post { if (!closed) result.error("contacts_failed", "系统通讯录操作未完成；目标可能已变化、不可写或已删除，请重新读取核对", null) }
             }
         }
     }

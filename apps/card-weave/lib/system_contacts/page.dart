@@ -1,3 +1,5 @@
+import 'export/session.dart';
+
 import 'package:flutter/cupertino.dart';
 
 import '../design.dart';
@@ -46,6 +48,15 @@ class _SystemContactsImportPageState extends State<SystemContactsImportPage> {
           strategy: strategy.importer!,
           command: widget.model.command,
           refresh: widget.model.refresh,
+          onImported: strategy.exporter == null
+              ? null
+              : (candidate) => associateImported(
+                  strategy.exporter!,
+                  widget.model.identity['dataset'] as String,
+                  candidate.sourceId,
+                  candidate.createdId!,
+                  candidate.contact,
+                ),
         );
         session!.addListener(update);
       }

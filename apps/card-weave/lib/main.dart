@@ -1,3 +1,4 @@
+import 'system_contacts/export/page.dart';
 import 'contacts/directory_page.dart';
 
 import 'dart:async';
@@ -493,6 +494,25 @@ class _ContactDetailState extends State<ContactDetail> {
                           await load();
                         },
                       ),
+                    AppGroup(
+                      children: [
+                        AppRow(
+                          title: const Text('保存或更新到系统通讯录'),
+                          subtitle: const Text('预览写入内容，管理本机关联'),
+                          onTap: contact!['has_conflict'] == true
+                              ? null
+                              : () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => SystemContactWritePage(
+                                      widget.model,
+                                      widget.id,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
                     AppButton.icon(
                       onPressed: contact!['has_conflict'] == true
                           ? null

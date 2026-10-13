@@ -147,6 +147,8 @@ Future<ImportCandidate> mapSystemContact(
         } else {
           dates.add(date);
         }
+      case 'vnd.io.cardweave.write-token':
+        break;
       case 'vnd.android.cursor.item/photo':
         warn('头像暂不导入');
       case 'vnd.android.cursor.item/group_membership':

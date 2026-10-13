@@ -1,3 +1,5 @@
+import 'package:card_weave/system_contacts/export/strategy.dart';
+
 import 'dart:convert';
 
 import 'package:path_provider/path_provider.dart';
@@ -42,7 +44,7 @@ void main() {
         ),
       );
       expect(strategy.importer, isNotNull);
-      expect(strategy.exporter, isNull);
+      expect(strategy.exporter, isNotNull);
       await t.pumpWidget(
         CupertinoApp(
           theme: const AppTheme(Brightness.light).cupertino,
@@ -105,6 +107,14 @@ void main() {
       final contacts =
           await m.command('list', {'search': '', 'offset': 0}) as List;
       expect(contacts.length, 1);
+      final link = await strategy.exporter!.link(
+        associationKey(
+          m.identity['dataset'] as String,
+          contacts.single['id'] as String,
+        ),
+      );
+      expect(link, isNotNull);
+      expect(link!['pending'], isNull);
       final data = contacts.single['data'];
       expect(data['phones'].single['value'], '+1 202-555-0199');
       expect(data['emails'].single['value'], 'cw-import@example.invalid');

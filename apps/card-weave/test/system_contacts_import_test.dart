@@ -418,7 +418,7 @@ void main() async {
       generic
           .resolve(const SystemContactsEnvironment('android', 'realme'))
           .exporter,
-      isNull,
+      isNotNull,
     );
     expect(
       generic.resolve(const SystemContactsEnvironment('ios', 'apple')).importer,

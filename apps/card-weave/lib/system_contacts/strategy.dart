@@ -1,3 +1,6 @@
+import 'export/strategy.dart';
+export 'export/strategy.dart' show SystemContactsExportStrategy;
+
 import 'dart:io';
 
 import 'mapping.dart';
@@ -17,22 +20,6 @@ abstract interface class SystemContactsImportStrategy {
     Map<String, dynamic> summary,
     Map<String, dynamic> detail,
   );
-}
-
-abstract interface class SystemContactsExportStrategy {
-  Future<String> permission({bool request = false});
-  Future<void> openSettings();
-
-  /// Implementations must return an outcome for each record, never silently merge.
-  Future<List<SystemContactExportResult>> exportContacts(
-    List<Map<String, dynamic>> contacts,
-  );
-}
-
-class SystemContactExportResult {
-  final String contactId;
-  final String? systemId, error;
-  const SystemContactExportResult(this.contactId, {this.systemId, this.error});
 }
 
 class SystemContactsStrategy {
@@ -72,6 +59,7 @@ class AndroidContactsStrategyFactory implements SystemContactsStrategyFactory {
   SystemContactsStrategy create(SystemContactsEnvironment environment) =>
       SystemContactsStrategy(
         'Android 系统通讯录',
+        exporter: const AndroidContactsExportStrategy(),
         importer: AndroidContactsImportStrategy(AndroidContactsSource()),
       );
 }
@@ -140,6 +128,7 @@ class RealmeContactsStrategyFactory implements SystemContactsStrategyFactory {
   SystemContactsStrategy create(SystemContactsEnvironment environment) =>
       SystemContactsStrategy(
         'realme 系统通讯录',
+        exporter: const AndroidContactsExportStrategy(),
         importer: AndroidContactsImportStrategy(
           AndroidContactsSource(),
           mapper: RealmeContactMapper(convertSolarToLunar),

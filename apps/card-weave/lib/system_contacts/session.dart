@@ -15,6 +15,7 @@ class ContactsImportSession extends ChangeNotifier {
   final SystemContactsImportStrategy strategy;
   final ImportCommand command;
   final Future<void> Function() refresh;
+  final Future<bool> Function(ImportCandidate candidate)? onImported;
   final List<ImportCandidate> candidates = [];
   bool loading = false, importing = false, ready = false, finished = false;
   bool _cancelled = false, _disposed = false;
@@ -25,6 +26,7 @@ class ContactsImportSession extends ChangeNotifier {
     required this.strategy,
     required this.command,
     required this.refresh,
+    this.onImported,
   });
   void changed() {
     if (!_disposed) notifyListeners();
@@ -166,6 +168,15 @@ class ContactsImportSession extends ChangeNotifier {
           c.selected = false;
           c.importFailed = false;
           c.error = null;
+          if (onImported != null) {
+            try {
+              if (!await onImported!(c)) {
+                c.warnings.add('多个账户记录或不可写记录，请在系统通讯录写入页面手动关联');
+              }
+            } catch (_) {
+              c.warnings.add('联系人已导入，本机关联未保存；请手动关联，勿重复导入');
+            }
+          }
         } catch (e) {
           c.importFailed =
               e is AppFailure &&
